@@ -16,11 +16,11 @@ while stillRunning
     nTicks = 5;
     plotModel = false;
     plotKMeans = true;
+    kmeansBins = 5;
     figWid = 600*(3+plotModel);
     figHeight = figWid/(3+plotModel);
     mapColorName = 'parula';
     climMax = 6e5; % Pa
-    
     
     if plotModel
         mapType = '-Model';
@@ -60,8 +60,19 @@ while stillRunning
             figure(mapPlotWindow)
             clf
         catch
-            clearvars timeErrorPlotNelder
+            clearvars mapPlotWindow
             mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+        end
+    end
+    if ~exist('mapPlotKMeans','var')
+        mapPlotKMeans = figure('Position',[figX figY figHeight figHeight]);
+    else
+        try
+            figure(mapPlotKMeans)
+            clf
+        catch
+            clearvars mapPlotKMeans
+            mapPlotKMeans = figure('Position',[figX+100 figY figHeight figHeight]);
         end
     end
 
@@ -112,7 +123,6 @@ while stillRunning
                 [X, Y] = meshgrid(xdata,ydata);
                 
                 freqList = [];
-                kmeansData = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),numel(resultsStruct.(varNames{j}).frequencyMap{1}));
                 for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
                     temp = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                     temp = 10.^(unique(floor(log10(temp))));
@@ -130,25 +140,55 @@ while stillRunning
                     end
                 end
                 
+                freqList = freqList(freqList>0);
                 if plotKMeans
+                    numObservations = NaN(size(resultsStruct.(varNames{j}).frequencyMap));
+                    for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
+                        temp = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                        temp = temp(temp>=min(freqList) & temp<=max(freqList));
+                        numObservations(k_pixels) = numel(temp);
+                    end
+                end
+                
+                if plotKMeans
+                    
+                    % Cleverly make a list of numbers to sample at which
+                    % divide each order of magnitude into 10 samples.
+                    newFreqs = [];
+                    for k = 2:numel(freqList)
+                        newFreqs = horzcat(newFreqs,linspace(freqList(k-1),freqList(k),10));
+                    end
+                    newFreqs = unique(newFreqs);
+                    
+                    kmeansData = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),numel(newFreqs));
                     for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
                         temp = resultsStruct.(varNames{j}).relaxanceMap{k_pixels};
+                        tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                        temp = temp(tempf>0);
+                        tempf = tempf(tempf>0);
                         if isempty(temp)
                             continue;
                         end
-                        kmeansData(k_pixels,:) = temp((temp >= min(freqList)) & (temp <= max(freqList)));
-%                         kmeansData(:,k_pixels) = temp((temp >= min(freqList)) & (temp <= max(freqList)));
-                    end
-                    
-                    opts = statset('UseParallel',1);
-                    idx = kmeans(kmeansData,'Options',opts,'MaxIter',10000,...
-                            'Display','final','Replicates',10);
                         
-                    disp('pause')
+                        % Resample to known array of frequencies
+                        ids = ((tempf >= min(freqList)) & (tempf <= max(freqList)));
+                        obsOut = interp1(tempf(ids),temp(ids),newFreqs,'makima',...
+                            'extrap');
+%                         try
+%                             figure(hfig);
+%                             clf;
+%                         catch
+%                             hfig = figure;
+%                         end
+%                         plot(newFreqs,obsOut,'r')
+%                         hold on
+%                         scatter(tempf(ids),temp(ids),'bo')
+%                         hold off
+                        
+                        kmeansData(k_pixels,:) = obsOut;
+                    end                    
                     
                 end
-                
-                freqList = freqList(freqList>0);
                                                         
                 for k_freq = 1:numel(freqList)
 
@@ -159,11 +199,13 @@ while stillRunning
                     mapDataError = NaN(mapSize);
                     mapDataTerms = NaN(mapSize);
                     mapDataHeight = NaN(mapSize);
+                    mapDataKMeans = NaN(mapSize);
                     clf(mapPlotWindow)
 
                     % Position for the map
                     xc = 1;
                     yc = 0;
+                    pixelLog = NaN(numel(mapDataStorage),2);
 
                     for k_pixels = 1:numel(mapDataStorage)
                         
@@ -173,6 +215,7 @@ while stillRunning
                             yc = yc + 1;
                         end
                         idx_pixel = sub2ind(mapSize,mapSize(2)-yc,xc);
+                        pixelLog(k_pixels,:) = [mapSize(2)-yc,xc];
                         
 %                         if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
 %                             xc = xc + 1;
@@ -332,7 +375,6 @@ while stillRunning
                             modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                             modelAngle = atand(modelLoss./modelStorage);
                             
-                            
                             if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan'))
                                 mapDataStorage(idx_pixel) = NaN;
                                 mapDataLoss(idx_pixel) = NaN;
@@ -351,6 +393,36 @@ while stillRunning
                         
                         end
 
+                    end
+                    
+                    if plotKMeans
+                        idxFreq = find(newFreqs == freqList(k_freq));
+                        opts = statset('UseParallel',1);
+                        idxK = kmeans(real(kmeansData(:,idxFreq)),kmeansBins,'Options',opts,'MaxIter',10000,...
+                                'Display','off','Replicates',100);
+                        for k_pixels = 1:numel(mapDataKMeans)
+                            mapDataKMeans(pixelLog(k_pixels,1),pixelLog(k_pixels,2)) = idxK(k_pixels);
+                        end
+                        
+                        figure(mapPlotKMeans)
+                        colormap(mapColorName)
+                        surf(X,Y,mapDataHeight,mapDataKMeans,'EdgeColor','interp')
+                        hold on
+                        title(sprintf('K-Means Clusters, %g Hz',freqList(k_freq)))
+                        ylabel('Y Index')
+                        xlabel('X Index')
+                        xlim([1 mapSize(1)])
+                        ylim([1 mapSize(2)])
+                        cb = colorbar('Ticks',1:kmeansBins,...
+                            'TickLabels',sprintfc('Bin %d',[1:kmeansBins]));
+%                         caxis([1 kmeansBins]);
+                        view(2)
+                        hold off
+                        
+                        saveas(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
+%                         saveas(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
+                        print(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
+                                                
                     end
                     
 %                     % Remove Outliers
