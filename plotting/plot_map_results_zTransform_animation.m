@@ -11,14 +11,15 @@ while stillRunning
     % User-Defined Settings
     nCols = 2;
     errortype = 'sse';
-    figX = 100;
+    figX = 20;
     figY = 100;
     nTicks = 5;
     plotModel = false;
-    figWid = 600*(3+plotModel);
-    figHeight = figWid/(3+plotModel);
+    figWid = 500*(3+plotModel);
+    figHeight = 600;
     mapColorName = 'parula';
     climMax = 6e5; % Pa
+    nFrames = 100;
     
     if plotModel
         mapType = '-Model';
@@ -58,7 +59,7 @@ while stillRunning
             figure(mapPlotWindow)
             clf
         catch
-            clearvars timeErrorPlotNelder
+            clearvars mapPlotWindow
             mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
         end
     end
@@ -109,27 +110,68 @@ while stillRunning
                 ydata = flip(1:mapSize(2));
                 [X, Y] = meshgrid(xdata,ydata);
                 
-                freqList = [];
+                minFreq = 0;
+                maxFreq = Inf;
                 for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
-                    temp = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
-                    temp = 10.^(unique(floor(log10(temp))));
-                    if any(isnan(temp)) || isempty(temp)
+                    tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    tempf = tempf(tempf>0);
+                    [temp,~] = min(tempf,[],'omitnan');
+                    if isnan(temp)|| isempty(temp)
                         continue;
                     end
-                    if k_pixels == 1
-                        freqList = temp;
-                    elseif numel(temp) > numel(freqList)
-                        freqList = temp;
+                    if temp > minFreq
+                        minFreq = temp;
+                    end
+                    tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    tempf = tempf(tempf>0);
+                    [temp,~] = max(tempf,[],'omitnan');
+                    if isnan(temp)|| isempty(temp)
+                        continue;
+                    end
+                    if temp < maxFreq
+                        maxFreq = temp;
                     end
                 end
                 
-                freqList = freqList(freqList>0);
+                % Count orders of 10
+                temp = minFreq;
+                tempf = minFreq;
+                magList = [];
+                while temp < maxFreq
+                    tempf = 10.^( floor( log10(temp) ) );
+                    magList = horzcat(magList,tempf);
+                    temp = temp + 200;
+                end
+                magList = unique(magList);
+                
+                % Cleverly make a list of numbers to sample at which
+                % divide each order of magnitude into 10 samples.
+                freqList = [];
+                for k = 2:numel(magList)
+                    freqList = horzcat(freqList,linspace(magList(k-1),magList(k),nFrames));
+                end
+                freqList = flip(unique(freqList)); % Process from high to low freq
                 
                 harmonicSettings = struct;
                 harmonicSettings.elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
                 harmonicSettings.fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
                 harmonicSettings.model = resultsStruct.(varNames{j}).model;
-                                                        
+                
+                % Prep the movie
+                u = uicontrol(mapPlotWindow,'Style','slider');
+                u.Position = [20 30 figWid-230 20];
+                u.Max = max(freqList);
+                u.Min = min(freqList);
+                u.Value = freqList(1);
+                u2 = uicontrol(mapPlotWindow,'Style','edit');
+                u2.Position = [figWid-175 20 150 40];
+                u2.String = [num2str(round(freqList(1))) ' Hz'];
+                u2.FontSize = 16;
+                drawnow
+                
+                gifFile = [originalPath filesep 'MapAnimation-' varNames{j}...
+                    mapType '.gif'];
+                
                 for k_freq = 1:numel(freqList)
 
                     % Make blank map data
@@ -139,8 +181,7 @@ while stillRunning
                     mapDataError = NaN(mapSize);
                     mapDataTerms = NaN(mapSize);
                     mapDataHeight = NaN(mapSize);
-                    clf(mapPlotWindow)
-
+                    
                     % Position for the map
                     xc = 1;
                     yc = 0;
@@ -286,7 +327,6 @@ while stillRunning
                                 mapDataTerms(idx_pixel) = NaN;
                                 mapDataHeight(idx_pixel) = NaN;
                                 xc = xc + 1;
-                                continue;
                             else
                                 [~,idx] = min(abs(freq-freqList(k_freq)));
                                 mapDataStorage(idx_pixel) = modelStorage(idx);
@@ -325,12 +365,22 @@ while stillRunning
                                 mapDataAngle(idx_pixel) = NaN;
                                 mapDataHeight(idx_pixel) = NaN;
                                 xc = xc + 1;
-                                continue;
                             else
-                                [~,idx] = min(abs(freq-freqList(k_freq)));
-                                mapDataStorage(idx_pixel) = modelStorage(idx);
-                                mapDataLoss(idx_pixel) = modelLoss(idx);
-                                mapDataAngle(idx_pixel) = modelAngle(idx);
+                                
+%                                 [~,idx] = min(abs(freq-freqList(k_freq)));                                
+                                % Resample to known array of frequencies
+                                ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
+                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                
+%                                 mapDataStorage(idx_pixel) = modelStorage(idx);
+%                                 mapDataLoss(idx_pixel) = modelLoss(idx);
+%                                 mapDataAngle(idx_pixel) = modelAngle(idx);
+
                                 mapDataHeight(idx_pixel) = pixelHeight_cell{idx_pixel};
                                 xc = xc + 1;
                             end
@@ -358,13 +408,14 @@ while stillRunning
                     mapDataLoss(mapDataLoss == 0) = NaN;
                     mapDataAngle(mapDataAngle == 0) = NaN;
 
-                    figure(mapPlotWindow)
-                    tiledlayout(1,3+plotModel, 'padding', 'none', 'TileSpacing', 'compact')
+                    tiledlayout(1,3+plotModel, 'padding', 'none', ...
+                        'TileSpacing', 'compact', ...
+                        'OuterPosition', [0 0.15 1 0.85])
                     colormap(mapColorName)
                     nexttile
                     surf(X,Y,mapDataHeight,mapDataStorage,'EdgeColor','interp')
                     hold on
-                    title(sprintf('Storage Modulus, %g Hz',freqList(k_freq)))
+                    title('Storage Modulus')
                     ylabel('Y Index')
                     xlabel('X Index')
                     xlim([1 mapSize(1)])
@@ -380,7 +431,7 @@ while stillRunning
                     nexttile
                     surf(X,Y,mapDataHeight,mapDataLoss,'EdgeColor','interp')
                     hold on
-                    title(sprintf('Loss Modulus, %g Hz',freqList(k_freq)))
+                    title('Loss Modulus')
                     xlabel('X Index')
                     xlim([1 mapSize(1)])
                     ylim([1 mapSize(2)])
@@ -395,7 +446,7 @@ while stillRunning
                     nexttile
                     surf(X,Y,mapDataHeight,mapDataAngle,'EdgeColor','interp')
                     hold on
-                    title(sprintf('Loss Angle, %g Hz',freqList(k_freq)))
+                    title('Loss Angle')
                     xlabel('X Index')
                     xlim([1 mapSize(1)])
                     ylim([1 mapSize(2)])
@@ -421,17 +472,39 @@ while stillRunning
                         view(2)
                         hold off
                     end
+                    
+                    % Save Animation
+                    u.Value = freqList(k_freq);
+                    u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
+                    drawnow
+                    M(k_freq) = getframe(mapPlotWindow);
+                    frame = M(k_freq);
+                    im = frame2im(frame);
+                    [imind,cm] = rgb2ind(im,256);
 
-                    saveas(mapPlotWindow,[originalPath '\MapPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
-                %     saveas(mapPlotWindow,[originalPath '\mapPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
-                    print(mapPlotWindow,[originalPath '\MapPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
-
+                    if k_freq == 1
+                        imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'Loopcount',inf);
+                    else
+                        imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'WriteMode','append');
+                    end
+                    
                 end
-                                    
+                
+                % Display Movie
+                playMov = true;
+                qst = "Would you like to play the movie again?";
+                while playMov
+                    movie(M);
+                    resp = questdlg(qst,"Replay Request",'Yes','Yes','No');
+                    if strcmp(resp,'No')
+                        playMov = false;
+                    end
+                end
+                
             end
-
+            
         end
-
+        
     end
 
     % Prompt user

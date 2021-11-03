@@ -16,6 +16,7 @@ while stillRunning
     nTicks = 5;
     plotModel = false;
     plotKMeans = true;
+    gradientOrder = 2; % Number of derivatives to take of the relaxance map 
     kmeansBins = 5;
     figWid = 600*(3+plotModel);
     figHeight = figWid/(3+plotModel);
@@ -75,7 +76,18 @@ while stillRunning
             mapPlotKMeans = figure('Position',[figX+100 figY figHeight figHeight]);
         end
     end
-
+    if ~exist('mapPlotGradients','var')
+        mapPlotGradients = figure('Position',[figX figY figHeight figHeight]);
+    else
+        try
+            figure(mapPlotGradients)
+            clf
+        catch
+            clearvars mapPlotGradients
+            mapPlotGradients = figure('Position',[figX+100 figY figHeight figHeight]);
+        end
+    end
+    
     % Make a list of unique colors for the test conditions
     directoryColors = num2cell(jet(numel(Folders)),2);
     
@@ -196,6 +208,7 @@ while stillRunning
                     mapDataStorage = NaN(mapSize);
                     mapDataLoss = NaN(mapSize);
                     mapDataAngle = NaN(mapSize);
+                    mapDataRelaxance = NaN(mapSize);
                     mapDataError = NaN(mapSize);
                     mapDataTerms = NaN(mapSize);
                     mapDataHeight = NaN(mapSize);
@@ -344,22 +357,35 @@ while stillRunning
                                     error('The model in your results structure was not recognized.')
                             end
                             
-                            [~,idx] = min(abs(freq-freqList(k_freq)));
+%                             [~,idx] = min(abs(freq-freqList(k_freq)));
+                            modelRelaxance = modelStorage + 1j*modelLoss;
                             
                             if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan'))
                                 mapDataStorage(idx_pixel) = NaN;
                                 mapDataLoss(idx_pixel) = NaN;
                                 mapDataAngle(idx_pixel) = NaN;
+                                mapDataRelaxance(idx_pixel) = NaN;
                                 mapDataError(idx_pixel) = NaN;
                                 mapDataTerms(idx_pixel) = NaN;
                                 mapDataHeight(idx_pixel) = NaN;
                                 xc = xc + 1;
-                                continue;
                             else
-                                [~,idx] = min(abs(freq-freqList(k_freq)));
-                                mapDataStorage(idx_pixel) = modelStorage(idx);
-                                mapDataLoss(idx_pixel) = modelLoss(idx);
-                                mapDataAngle(idx_pixel) = modelAngle(idx);
+                                % Resample to known array of frequencies
+                                ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
+                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataRelaxance(idx_pixel) = interp1(freq(ids),modelRelaxance(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                                                
+%                                 mapDataStorage(idx_pixel) = modelStorage(idx);
+%                                 mapDataLoss(idx_pixel) = modelLoss(idx);
+%                                 mapDataAngle(idx_pixel) = modelAngle(idx);
+%                                 mapDataRelaxance(idx_pixel) = modelRelaxance(idx);
+                                
                                 mapDataError(idx_pixel) = modelErrorTime;
                                 mapDataTerms(idx_pixel) = bestidx;
                                 mapDataHeight(idx_pixel) = pixelHeight_cell{idx_pixel};
@@ -374,19 +400,31 @@ while stillRunning
                             modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                             modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                             modelAngle = atand(modelLoss./modelStorage);
+                            modelRelaxance = resultsStruct.(varNames{j}).relaxanceMap{k_pixels};
                             
                             if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan'))
                                 mapDataStorage(idx_pixel) = NaN;
                                 mapDataLoss(idx_pixel) = NaN;
                                 mapDataAngle(idx_pixel) = NaN;
+                                mapDataRelaxance(idx_pixel) = NaN;
                                 mapDataHeight(idx_pixel) = NaN;
                                 xc = xc + 1;
-                                continue;
                             else
-                                [~,idx] = min(abs(freq-freqList(k_freq)));
-                                mapDataStorage(idx_pixel) = modelStorage(idx);
-                                mapDataLoss(idx_pixel) = modelLoss(idx);
-                                mapDataAngle(idx_pixel) = modelAngle(idx);
+                                % Resample to known array of frequencies
+                                ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
+                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                mapDataRelaxance(idx_pixel) = interp1(freq(ids),modelRelaxance(ids),freqList(k_freq),'makima',...
+                                    'extrap');
+                                
+%                                 mapDataStorage(idx_pixel) = modelStorage(idx);
+%                                 mapDataLoss(idx_pixel) = modelLoss(idx);
+%                                 mapDataAngle(idx_pixel) = modelAngle(idx);
+
                                 mapDataHeight(idx_pixel) = pixelHeight_cell{idx_pixel};
                                 xc = xc + 1;
                             end
@@ -394,6 +432,10 @@ while stillRunning
                         end
 
                     end
+                    
+                    mapDataStorage(mapDataStorage == 0) = NaN;
+                    mapDataLoss(mapDataLoss == 0) = NaN;
+                    mapDataAngle(mapDataAngle == 0) = NaN;
                     
                     if plotKMeans
                         idxFreq = find(newFreqs == freqList(k_freq));
@@ -422,28 +464,58 @@ while stillRunning
                         saveas(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
 %                         saveas(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
                         print(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
-                                                
+
                     end
                     
-%                     % Remove Outliers
-%                     c = -1/(sqrt(2)*erfcinv(3/2));
-%                     MAD_temp = 3.*c.*median(abs(mapDataStorage-median(mapDataStorage,'all')),'all');
-%                     idx = abs(mapDataStorage-median(mapDataStorage,'all')) > MAD_temp;
-% %                     MAD_temp = c.*median(abs(mapDataLoss-median(mapDataLoss,'all')),'all');
-% %                     idx = idx + (abs(mapDataLoss-median(mapDataLoss,'all')) > MAD_temp);
-%                     idx = logical(idx);
-%                     mapDataStorage(idx) = NaN;
-%                     mapDataLoss(idx) = NaN;
-%                     mapDataAngle(idx) = NaN;
-%                     mapDataError(idx) = NaN;
-%                     mapDataTerms(idx) = NaN;
+                    if gradientOrder > 0
+                        
+                        for i_grad = 0:gradientOrder
+                            
+                            figure(mapPlotGradients)
+                            colormap(mapColorName)
+                            gradData = mapDataRelaxance;
+                            GX = mapDataRelaxance;
+                            GY = mapDataRelaxance;
+                            ii = 0;
+                            while ii < i_grad
+                                [GX,GY] = gradient(abs(gradData));
+                                gradData = sqrt(GX.^2+GY.^2);
+    %                             gradData = GX+GY;
+                                ii = ii + 1;
+                            end
+                            if i_grad == 0
+                                surf(X,Y,mapDataHeight,abs(mapDataRelaxance),'EdgeColor','interp')
+                            else
+                                contourf(X,Y,abs(gradData),20);
+                            end
+                            hold on
+                            if i_grad > 0
+                                quiver(X,Y,GX,GY,4,'w-','linewidth',0.8)
+                            end
+                            title(sprintf('Relaxance Gradient (x%d), %g Hz',i_grad,freqList(k_freq)))
+                            ylabel('Y Index')
+                            xlabel('X Index')
+                            xlim([1 mapSize(1)])
+                            ylim([1 mapSize(2)])
+                            cb = colorbar;
+                            if i_grad > 1
+                                cb.Ruler.TickLabelFormat=['%g' sprintf(' Pa/s^{%d}',i_grad)];
+                            elseif i_grad == 1
+                                cb.Ruler.TickLabelFormat=['%g Pa/s'];
+                            else
+                                cb.Ruler.TickLabelFormat=['%g Pa'];
+                            end
+                            view(2)
+                            hold off
 
-%                     plotRange = [10 90];
+                            saveas(mapPlotGradients,[originalPath '\MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
+    %                         saveas(mapPlotGradients,[originalPath '\MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
+                            print(mapPlotGradients,[originalPath '\MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
+                        
+                        end
+                        
+                    end
                     
-                    mapDataStorage(mapDataStorage == 0) = NaN;
-                    mapDataLoss(mapDataLoss == 0) = NaN;
-                    mapDataAngle(mapDataAngle == 0) = NaN;
-
                     figure(mapPlotWindow)
                     tiledlayout(1,3+plotModel, 'padding', 'none', 'TileSpacing', 'compact')
                     colormap(mapColorName)
