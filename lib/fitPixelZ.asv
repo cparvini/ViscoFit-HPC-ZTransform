@@ -217,7 +217,6 @@ switch solver
             hfig = figure;
         end
         tiledlayout(1,3);
-        omega = 2*pi*f_hz;
         [Q_storage,Q_loss] = getZModels('maxwell',n_terms,alphaInit);
         
         nexttile
@@ -358,7 +357,6 @@ switch solver
 
     otherwise
         error('That solver is not supported.')
-        
 end
 postFitting = toc;
 

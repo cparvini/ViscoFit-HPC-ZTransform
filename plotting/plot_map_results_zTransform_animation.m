@@ -91,6 +91,13 @@ while stillRunning
             
             varNames = fields(resultsStruct);
             
+            fileLabels = cell(numel(Files),1);
+            for j = 1:numel(Files)
+                temp = strsplit(Files(j).name,{'-','_','.'});
+                idx = find(contains(lower(temp),{'fitresults','mapresults'}),1);
+                fileLabels{j} = strjoin(temp([1 idx-1]),'-');
+            end
+            
             for j = 1:numel(varNames)
                 
                 if ~contains(varNames{j},'zTransform')
@@ -116,7 +123,7 @@ while stillRunning
                     tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                     tempf = tempf(tempf>0);
                     [temp,~] = min(tempf,[],'omitnan');
-                    if isnan(temp)|| isempty(temp)
+                    if any([isnan(temp),isempty(temp)])
                         continue;
                     end
                     if temp > minFreq
@@ -169,7 +176,7 @@ while stillRunning
                 u2.FontSize = 16;
                 drawnow
                 
-                gifFile = [originalPath filesep 'MapAnimation-' varNames{j}...
+                gifFile = [path filesep fileLabels{j_dir} '-MapAnimation-' varNames{j}...
                     mapType '.gif'];
                 
                 for k_freq = 1:numel(freqList)

@@ -131,7 +131,7 @@ for i_dir = 1:length(Folders)
     
     if numMaps > 1
         % Grab the map filenames to name our output files easily
-        FilesCheck=dir([originalPath filesep '*.*']);
+        FilesCheck=dir([path filesep '*.*']);
 
         % Remove Directories
         FilesCheck=FilesCheck(~ismember({FilesCheck.name},{'.','..'}));
@@ -246,7 +246,7 @@ for i_dir = 1:length(Folders)
         extractionSettings.N_workers = N_workers;                   % Pass the number of workers to the fitting
         extractionSettings.hideSubstrate = viscoZ.hideSubstrate;    % Remove pixels designated as "substrate" from the visco fitting
         extractionSettings.windowsize = 10;                         % Window size for smoothing methods
-        extractionSettings.smoothOpt = 'ma-time';                   % Which smoothing setting to use on the harmonics.
+        extractionSettings.smoothOpt = 'none';                      % Which smoothing setting to use on the harmonics.
                                                                     % Options: none, g-time, ma-time, g-hz, ma-hz
                                                                     % *-time smooths before z-transform. *-hz will
                                                                     % smooth after z-transforming F and h.

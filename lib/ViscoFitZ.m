@@ -66,6 +66,7 @@ classdef ViscoFitZ
         tipSize double {mustBePositive}
         tipSize_cell cell
         tipGeom string
+        minTimescale double {mustBePositive}
         nu double {mustBePositive}
         nu_cell cell
         thinSample logical
@@ -110,7 +111,6 @@ classdef ViscoFitZ
                 temp = cellfun(@(nu,t) nu.*ones(size(t)),tempnu,times,'UniformOutput',false);
                 obj.nu = horzcat(temp{:});
                 obj.nu_cell = temp;
-                obj.tipGeom = "spherical";
                 if ~isempty(varargin)
                     if isa(varargin{1},'struct')
                         % Grab the settings structure
@@ -126,7 +126,18 @@ classdef ViscoFitZ
                             obj.pixelHeight = horzcat(temp{:});
                             obj.pixelHeight_cell = inputSettings.pixelHeight;
                         end
-                        obj.tipGeom = string(inputSettings.tipGeom);
+                        
+                        if isfield(inputSettings,'tipGeom')
+                            obj.tipGeom = string(inputSettings.tipGeom);
+                        else
+                            obj.tipGeom = "spherical";
+                        end
+                        
+                        if isfield(inputSettings,'minTimescale')
+                            obj.minTimescale = inputSettings.minTimescale;
+                        else
+                            obj.minTimescale = 1e-4;
+                        end
                         
                         if isfield(inputSettings,'thinSample')
                             obj.thinSample = inputSettings.thinSample;
@@ -162,10 +173,13 @@ classdef ViscoFitZ
                 obj.indentations = horzcat(indentations{:});
                 obj.indentations_cell = indentations;
 
-                temp = cellfun(@(t) round(mode(gradient(t)),1,'significant').*ones(size(t)),times,'UniformOutput',false);
-                obj.dts = horzcat(temp{:});
-                obj.dts_cell = temp;
-
+                try
+                    temp = cellfun(@(t) round(mode(gradient(t)),1,'significant').*ones(size(t)),times,'UniformOutput',false);
+                    obj.dts = horzcat(temp{:});
+                    obj.dts_cell = temp;
+                catch
+                    disp('pause');
+                end
                 temp = cellfun(@(r,t) r.*ones(size(t)),tipSize,times,'UniformOutput',false);
                 obj.tipSize = horzcat(temp{:});
                 obj.tipSize_cell = temp;

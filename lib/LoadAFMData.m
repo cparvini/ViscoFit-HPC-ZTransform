@@ -605,19 +605,13 @@ for k = 1:size(dataStruct,2)
             else
                 delay = 0;
             end
-            
-            [~, dSmoothMin] = min(d_smooth);
-        
-            if isempty(dSmoothMin) || dSmoothMin <= 0 || dSmoothMin > length(dataStruct(k).z_approach)
-                dSmoothMin = 1;
-            end
 
             d_smooth = sf;
             
             % Calculate Deflection Offset
-            [~, d_min_ind] = min(d_smooth);
+            [~, dSmoothMin] = min(d_smooth);
             indScale = 0.9;
-            d_0_mean = mean(dataStruct(k).d_approach(1:round(d_min_ind*indScale)));
+            d_0_mean = mean(dataStruct(k).d_approach(1:round(dSmoothMin*indScale)));
             dataStruct(k).d_corrected = dataStruct(k).d_approach - d_0_mean;
             dataStruct(k).d_full_corrected = dataStruct(k).d - d_0_mean;
 
@@ -800,13 +794,17 @@ for k = 1:size(dataStruct,2)
         data = (data(1:numel(data)/2));
         L_smooth = (L_smooth(1:ceil(numel(L_smooth)/2)));
 
-        temp = 5*max(abs(L_smooth(1:round(numel(L_smooth)/20))));
-        upperLim = mean(L_smooth(1:round(numel(L_smooth)/20)))+temp;
-        idx = find(L_smooth>upperLim,1,'first')-1;
-
+        try
+            temp = 5*max(abs(L_smooth(1:ceil(numel(L_smooth)/20))));
+            upperLim = mean(L_smooth(1:ceil(numel(L_smooth)/20)))+temp;
+            idx = find(L_smooth>upperLim,1,'first')-1;
+        catch
+            idx = [];
+        end
+        
         if ~isempty(idx)
             tip_rep_pos = idx;
-            if idx-delay > 0
+            if idx-delay > 1
                 tip_rep_pos_smooth = idx-delay;
             else
                 tip_rep_pos_smooth = 2;
@@ -883,7 +881,6 @@ for k = 1:size(dataStruct,2)
     dataStruct(k).t_r_smooth = t_rep_smooth(tip_rep_pos_smooth:end) - t_rep_smooth(tip_rep_pos_smooth-1);
     dataStruct(k).z_r_smooth = z_rep_smooth(tip_rep_pos_smooth:end) - z_rep_smooth(tip_rep_pos_smooth-1);
     dataStruct(k).d_r_smooth = d_rep_smooth(tip_rep_pos_smooth:end) - d_rep_smooth(tip_rep_pos_smooth-1);
-    
     dataStruct(k).tip_rep_pos = tip_rep_pos;
     dataStruct(k).tip_rep_pos_smooth = tip_rep_pos_smooth;
     

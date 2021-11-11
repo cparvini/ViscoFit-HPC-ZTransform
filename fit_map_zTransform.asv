@@ -264,7 +264,7 @@ for i_dir = 1:length(Folders)
                                                             % Options: none, g-time, ma-time, g-hz, ma-hz
                                                             % *-time smooths before z-transform. *-hz will
                                                             % smooth after z-transforming F and h.
-        fitSettings.windowsize = 10;                        % Window size for smoothing methods
+        fitSettings.windowsize = 10;                        % 
         
         maxwellFit_zTransform = fitMapZ_func(viscoZ,fitSettings);
         maxwellFit_zTransform.mapSize = mode(cat(1,mapSize{:}),1);

@@ -25,6 +25,12 @@ function fitStructOut = fitMapZ_func(fitClass,varargin)
 
 % Initialize Output Structure
 tempFile = fullfile(tempdir,'fitStructTemp.mat');
+try
+    delete tempFile
+    fprintf('\nDeleted Old Temporary File.\n');
+catch
+    fprintf('\nNo Old Temporary File Exists. Creating a new one.\n');
+end
 fitStruct = matfile(tempFile,'Writable',true);
 
 % Default Settings
@@ -39,11 +45,12 @@ N_workers = [];             % Number of workers for parpool
 hideSubstrate = false;      % Setting to threshold based on height, and 
                             % remove the substrate from viscoelastic fitting. 
                             % Note: Do NOT use ignoreGlass on monolayers!
-smoothOpt = 'ma-time';      % Which smoothing setting to use on the harmonics.
+smoothOpt = 'none';         % Which smoothing setting to use on the harmonics.
                             % Options: none, g-time, ma-time, g-hz, ma-hz
                             % *-time smooths before z-transform. *-hz will
                             % smooth after z-transforming F and h.
 windowsize = 10;            % Window size for smoothing methods
+
 if ~isempty(varargin)
     % Only one varargin is accepted, and it is a structure
     % containing all of the settings information we require
@@ -76,6 +83,12 @@ if ~isempty(varargin)
     end
     try
         hideSubstrate = fitOpts.hideSubstrate;
+    end
+    try
+        smoothOpt = fitOpts.smoothOpt;
+    end
+    try
+        windowsize = fitOpts.windowsize;
     end
     if strcmpi(solver,'custom')
         if isfield(fitOpts,'customFunc')
@@ -261,18 +274,13 @@ for i = 1:n_elements
         poolobj = parpool(N_workers,'IdleTimeout', 120);
     end
 
-    % Send the class to the workers
-    addAttachedFiles(poolobj, {'LR_Maxwell.m','LR_Voigt.m','LR_PLR.m',...
-        'SSE_Maxwell_Map.m','SSE_Voigt_Map.m','SSE_PLR_Map.m',...
-        'fitPixelZ.m'})
-
     fprintf('%d terms...', i)
 
     % Initialize Variables
     paramLen = length(bestParamsMap{1});
     
     % Original
-    parfor j = 1:n_pixels
+    for j = 1:n_pixels
         % Check if the pixel should be skipped
         if hideSubstrate
             if any(ismember(j,pixelSkip))
@@ -327,7 +335,7 @@ for i = 1:n_elements
             paramPopulationMap(j),...
             paramPopulationResidualsMap(j),...
             elasticFitTimeMap(j),...
-            fitTimeMap(j)] = fitPixelZ(i,n_iterations,model,solver,n_fitIterations,minTimescaleTemp,dataIn(j),paramLen,objFuncMap,elasticSetting,fluidSetting,bestParamsMap{j});
+            fitTimeMap(j)] = fitPixelZ(i,n_iterations,model,solver,n_fitIterations,minTimescaleTemp,dataIn(j),paramLen,objFuncMap,elasticSetting,fluidSetting,bestParamsMap{j},smoothOpt,windowsize);
         
     end
 

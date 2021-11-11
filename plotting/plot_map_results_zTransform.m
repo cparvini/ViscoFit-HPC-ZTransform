@@ -18,6 +18,7 @@ while stillRunning
     plotKMeans = true;
     gradientOrder = 2; % Number of derivatives to take of the relaxance map 
     kmeansBins = 5;
+    lowfreqCutoff = sqrt(eps);
     figWid = 600*(3+plotModel);
     figHeight = figWid/(3+plotModel);
     mapColorName = 'parula';
@@ -106,6 +107,13 @@ while stillRunning
         if isempty(Files)
             error('The directory you selected does not contain a Z-Transform QI map. Please verify your FitResults file is in that directory and the filename contains "zTransform".');
         end
+        
+        fileLabels = cell(numel(Files),1);
+        for j = 1:numel(Files)
+            temp = strsplit(Files(j).name,{'-','_','.'});
+            idx = find(contains(lower(temp),{'fitresults','mapresults'}),1);
+            fileLabels{j} = strjoin(temp([1 idx-1]),'-');
+        end
 
         for j_dir = 1:length(Files)
             resultsStruct = load([Files(j_dir).folder '\' Files(j_dir).name],'-mat');
@@ -134,25 +142,82 @@ while stillRunning
                 ydata = flip(1:mapSize(2));
                 [X, Y] = meshgrid(xdata,ydata);
                 
-                freqList = [];
+%                 freqList = [];
+%                 for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
+%                     temp = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+%                     temp = 10.^(unique(floor(log10(temp))));
+%                     if any(isnan(temp)) || isempty(temp)
+%                         continue;
+%                     end
+%                     
+%                     % Remove frequencies to query where we have a curve
+%                     % that doesn't contain enough info (so all pixels can
+%                     % have data for our plots).
+%                     if k_pixels == 1
+%                         freqList = temp;
+%                     elseif numel(temp) < numel(freqList)
+%                         freqList = temp;
+%                     end
+%                 end
+%                 
+%                 freqList = freqList(freqList>0);
+                
+                minFreq = 0;
+                maxFreq = Inf;
+                numFreqPoints = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),1);
+                minFreqPoints = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),1);
+                maxFreqPoints = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),1);
                 for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
-                    temp = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
-                    temp = 10.^(unique(floor(log10(temp))));
-                    if any(isnan(temp)) || isempty(temp)
+                    tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    tempf = tempf(tempf>lowfreqCutoff);
+                    [temp,~] = min(tempf,[],'omitnan');
+                    if any([isnan(temp),isempty(temp)])
                         continue;
                     end
-                    
-                    % Remove frequencies to query where we have a curve
-                    % that doesn't contain enough info (so all pixels can
-                    % have data for our plots).
-                    if k_pixels == 1
-                        freqList = temp;
-                    elseif numel(temp) < numel(freqList)
-                        freqList = temp;
+                    numFreqPoints(k_pixels) = numel(tempf(~isnan(tempf)));
+                    minFreqPoints(k_pixels) = min(tempf,[],'omitnan');
+                    maxFreqPoints(k_pixels) = max(tempf,[],'omitnan');
+                    if temp > minFreq
+                        minFreq = temp;
+                    end
+                    tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    tempf = tempf(tempf>lowfreqCutoff);
+                    [temp,~] = max(tempf,[],'omitnan');
+                    if isnan(temp)|| isempty(temp)
+                        continue;
+                    end
+                    if temp < maxFreq
+                        maxFreq = temp;
                     end
                 end
                 
-                freqList = freqList(freqList>0);
+                % Count orders of 10
+                temp = minFreq;
+                tempf = minFreq;
+                magList = [];
+                while temp < maxFreq
+                    tempf = 10.^( floor( log10(temp) ) );
+                    magList = horzcat(magList,tempf);
+                    temp = temp + 200;
+                end
+                magList = unique(magList);
+                
+%                 % Cleverly make a list of numbers to sample at which
+%                 % divide each order of magnitude into 10 samples.
+%                 freqList = [];
+%                 for k = 2:numel(magList)
+%                     freqList = horzcat(freqList,linspace(magList(k-1),magList(k),10));
+%                 end
+%                 freqList = flip(unique(freqList)); % Process from high to low freq
+                freqList = magList;
+                
+                fprintf('%s, # of Datapoints in Frequency: %d to %d; Median Number: %d, Frequency Range: %dHz to %dHz\n',...
+                    fileLabels{j_dir},min(numFreqPoints,[],'omitnan'),...
+                    max(numFreqPoints,[],'omitnan'),...
+                    round(median(numFreqPoints,'all','omitnan')),...
+                    min(minFreqPoints,[],'omitnan'),...
+                    max(maxFreqPoints,[],'omitnan'));
+                
                 if plotKMeans
                     numObservations = NaN(size(resultsStruct.(varNames{j}).frequencyMap));
                     for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
@@ -164,27 +229,28 @@ while stillRunning
                 
                 if plotKMeans
                     
-                    % Cleverly make a list of numbers to sample at which
-                    % divide each order of magnitude into 10 samples.
-                    newFreqs = [];
-                    for k = 2:numel(freqList)
-                        newFreqs = horzcat(newFreqs,linspace(freqList(k-1),freqList(k),10));
-                    end
-                    newFreqs = unique(newFreqs);
+%                     % Cleverly make a list of numbers to sample at which
+%                     % divide each order of magnitude into 10 samples.
+%                     newFreqs = [];
+%                     for k = 2:numel(freqList)
+%                         newFreqs = horzcat(newFreqs,linspace(freqList(k-1),freqList(k),10));
+%                     end
+%                     newFreqs = unique(newFreqs);
+                    newFreqs = magList;
                     
                     kmeansData = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),numel(newFreqs));
                     for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
                         temp = resultsStruct.(varNames{j}).relaxanceMap{k_pixels};
                         tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
-                        temp = temp(tempf>0);
-                        tempf = tempf(tempf>0);
+                        temp = temp(tempf>lowfreqCutoff);
+                        tempf = tempf(tempf>lowfreqCutoff);
                         if isempty(temp)
                             continue;
                         end
                         
                         % Resample to known array of frequencies
-                        ids = ((tempf >= min(freqList)) & (tempf <= max(freqList)));
-                        obsOut = interp1(tempf(ids),temp(ids),newFreqs,'makima',...
+%                         ids = ((tempf >= min(freqList)) & (tempf <= max(freqList)));
+                        obsOut = interp1(tempf,temp,freqList,'makima',...
                             'extrap');
 %                         try
 %                             figure(hfig);
@@ -194,10 +260,11 @@ while stillRunning
 %                         end
 %                         plot(newFreqs,obsOut,'r')
 %                         hold on
-%                         scatter(tempf(ids),temp(ids),'bo')
+%                         scatter(tempf,temp,'bo')
 %                         hold off
                         
                         kmeansData(k_pixels,:) = obsOut;
+                        
                     end                    
                     
                 end
@@ -371,14 +438,14 @@ while stillRunning
                                 xc = xc + 1;
                             else
                                 % Resample to known array of frequencies
-                                ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
-                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
+%                                 ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
+                                mapDataStorage(idx_pixel) = interp1(freq,modelStorage,freqList(k_freq),'makima',...
                                     'extrap');
-                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
+                                mapDataLoss(idx_pixel) = interp1(freq,modelLoss,freqList(k_freq),'makima',...
                                     'extrap');
-                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
+                                mapDataAngle(idx_pixel) = interp1(freq,modelAngle,freqList(k_freq),'makima',...
                                     'extrap');
-                                mapDataRelaxance(idx_pixel) = interp1(freq(ids),modelRelaxance(ids),freqList(k_freq),'makima',...
+                                mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
                                     'extrap');
                                                                 
 %                                 mapDataStorage(idx_pixel) = modelStorage(idx);
@@ -411,14 +478,14 @@ while stillRunning
                                 xc = xc + 1;
                             else
                                 % Resample to known array of frequencies
-                                ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
-                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
+%                                 ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
+                                mapDataStorage(idx_pixel) = interp1(freq,modelStorage,freqList(k_freq),'makima',...
                                     'extrap');
-                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
+                                mapDataLoss(idx_pixel) = interp1(freq,modelLoss,freqList(k_freq),'makima',...
                                     'extrap');
-                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
+                                mapDataAngle(idx_pixel) = interp1(freq,modelAngle,freqList(k_freq),'makima',...
                                     'extrap');
-                                mapDataRelaxance(idx_pixel) = interp1(freq(ids),modelRelaxance(ids),freqList(k_freq),'makima',...
+                                mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
                                     'extrap');
                                 
 %                                 mapDataStorage(idx_pixel) = modelStorage(idx);
@@ -461,9 +528,9 @@ while stillRunning
                         view(2)
                         hold off
                         
-                        saveas(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
-%                         saveas(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
-                        print(mapPlotKMeans,[originalPath '\KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
+                        saveas(mapPlotKMeans,[path filesep fileLabels{j_dir} '-KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
+%                         saveas(mapPlotKMeans,[path filesep fileLabels{j_dir} '-KMeansPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
+                        print(mapPlotKMeans,[path filesep fileLabels{j_dir} '-KMeansPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
 
                     end
                     
@@ -508,9 +575,9 @@ while stillRunning
                             view(2)
                             hold off
 
-                            saveas(mapPlotGradients,[originalPath '\MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
-    %                         saveas(mapPlotGradients,[originalPath '\MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
-                            print(mapPlotGradients,[originalPath '\MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
+                            saveas(mapPlotGradients,[path filesep fileLabels{j_dir} '-MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
+    %                         saveas(mapPlotGradients,[path filesep fileLabels{j_dir} '-MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
+                            print(mapPlotGradients,[path filesep fileLabels{j_dir} '-MapGradient-Order' sprintf('%d',i_grad) '-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
                         
                         end
                         
@@ -580,10 +647,10 @@ while stillRunning
                         hold off
                     end
 
-                    saveas(mapPlotWindow,[originalPath '\MapPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
-                %     saveas(mapPlotWindow,[originalPath '\mapPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
-                    print(mapPlotWindow,[originalPath '\MapPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
-
+                    saveas(mapPlotWindow,[path filesep fileLabels{j_dir} '-MapPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.fig'])
+                %     saveas(mapPlotWindow,[path filesep fileLabels{j_dir} '-MapPlot-' varNames{j} mapType '-' num2str(omegaList(k_omega)) 'Hz.jpg'])
+                    print(mapPlotWindow,[path filesep fileLabels{j_dir} '-MapPlot-' varNames{j} mapType '-' num2str(freqList(k_freq)) 'Hz.png'],'-dpng','-r300');
+                    
                 end
                                     
             end
@@ -601,6 +668,7 @@ while stillRunning
     switch answer
         case 'No'
             clearvars -except originalPath
+            close all
             stillRunning = false;
         case 'Yes'
             close all
