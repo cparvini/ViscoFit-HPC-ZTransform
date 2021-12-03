@@ -1,4 +1,4 @@
-function [relaxanceMap_out,retardanceMap_out,alphaMap_out,frequencyMap_out,bestParamsMap_out,paramPopulationMap_out,paramPopulationResidualsMap_out,elasticFitTimeMap_out,fitTimeMap_out] = fitPixelZ(n_terms,n_iterations,model,solver,n_fitIterations,minTimescaleTemp,dataInDistrib,paramLen,objFuncMap,elasticSetting,fluidSetting,bestParamsMap,smoothOpt,windowsize)
+function [relaxanceMap_out,retardanceMap_out,alphaMap_out,frequencyMap_out,bestParamsMap_out,paramPopulationMap_out,paramPopulationResidualsMap_out,elasticFitTimeMap_out,fitTimeMap_out] = fitPixelZ(n_terms,n_iterations,model,solver,n_fitIterations,minTimescaleTemp,dataInDistrib,paramLen,objFuncMap,elasticSetting,fluidSetting,bestParamsMap,smoothOpt,windowsize,thinPixel)
 %FITPIXELZ Perform a Viscoelastic Fit to One Pixel in a QI Map using the
 %Z-Transform Method
 %   This function takes in a variety of settings in addition to
@@ -67,9 +67,14 @@ switch model
         ub(modulusInds) = 1e12;
         lb(modulusInds) = 1e-2;
 
+        % Use minTimescale
         tauCenters = minTimescaleTemp.*(10.^( (1:length(ub(3:2:end)))-1 ));
-        ub(tauInds) = tauCenters*10;
-        lb(tauInds) = tauCenters/10;
+%         ub(tauInds) = tauCenters*10;
+%         lb(tauInds) = tauCenters/10;
+        
+        % Don't use minTimescale
+        lb(tauInds) = 10^(ceil(log10(mode(dataIn{2})))-2);
+        ub(tauInds) = 1./lb(tauInds);
 
         if ~elasticSetting
             ub(1) = eps;
@@ -84,9 +89,9 @@ switch model
         % Restrict the range of random guesses, if desired.
         % Otherwise, they should be set equal to ub & lb
         ub_rand(modulusInds) = 6;
-        ub_rand(tauInds) = log10(ub(tauInds));
-        lb_rand(modulusInds) = 1;
-        lb_rand(tauInds) = log10(lb(tauInds));
+        ub_rand(tauInds) = ceil(log10(max(dataIn{1})))+1;
+        lb_rand(modulusInds) = 0;
+        lb_rand(tauInds) = floor(log10(dataIn{8}))-1;
 
     case 'voigt'
         % Compliances are limited to "reasonable" bounds
@@ -95,8 +100,12 @@ switch model
         lb(modulusInds) = 1e-12;
 
         tauCenters = minTimescaleTemp.*(10.^( (1:length(ub(3:2:end)))-1 ));
-        ub(tauInds) = tauCenters*10;
-        lb(tauInds) = tauCenters/10;
+%         ub(tauInds) = tauCenters*10;
+%         lb(tauInds) = tauCenters/10;
+
+        % Don't use minTimescale
+        lb(tauInds) = 10^(ceil(log10(mode(dataIn{2})))-2);
+        ub(tauInds) = 1./lb(tauInds);
 
         if ~elasticSetting
             ub(1) = eps;
@@ -110,10 +119,10 @@ switch model
 
         % Restrict the range of random guesses, if desired.
         % Otherwise, they should be set equal to ub & lb
-        ub_rand(modulusInds) = -1;
-        ub_rand(tauInds) = log10(ub(tauInds));
+        ub_rand(modulusInds) = 0;
+        ub_rand(tauInds) = ceil(log10(max(dataIn{1})))+1;
         lb_rand(modulusInds) = -6;
-        lb_rand(tauInds) = log10(lb(tauInds));
+        lb_rand(tauInds) = floor(log10(dataIn{8}))-1;
 
     case 'plr'
         % Power Law Rheology Roster:
@@ -154,24 +163,25 @@ if any(isnan(dataIn{3}))
 end
 
 % Get Z-Transform Data from Curve
-[Q_hz,F_t,F_hz,h_t,h_hz,f_hz,alphaInit] = zTransformCurve(dataIn,smoothOpt,windowsize);
+% Do NOT save smoothed data. Only use the smoothing for fitting!
+[Q_hz,F_t,~,h_t,~,f_hz,alphaInit] = zTransformCurve(dataIn,'none',windowsize,thinPixel);
 
 U_hz = 1./(Q_hz);
 relaxanceMap = Q_hz;
 retardanceMap = U_hz;
 alphaMap = alphaInit;
-frequencyMap = f_hz; 
+frequencyMap = f_hz;
 
 tic;
 switch solver
     case 'nelder-mead'
 
-        options = optimset('Display','none',...
+        options = optimset('Display','iter-detailed',...
                     'PlotFcns',[],...
                     'MaxFunEvals',n_fitIterations,...
                     'MaxIter',n_fitIterations,...
-                    'TolFun',1e-60,...
-                    'TolX',1e-60);
+                    'TolFun',0,...
+                    'TolX',0);
 
         if n_terms == 1 && elasticSetting
             % Fit the elastic term separately for the first
@@ -185,7 +195,7 @@ switch solver
             for k = 1:n_iterations
                 % Get the grid search starting position
                 beta0 = getfield(logspace(ub_rand(1),lb_rand(1),n_iterations),{k});
-                [beta_dist_elastic(k),residual_dist_elastic(k)] = fminsearch(@(x)objFuncMap(dataIn,x,smoothOpt,windowsize,elasticSetting,fluidSetting),beta0,options);
+                [beta_dist_elastic(k),residual_dist_elastic(k)] = fminsearch(@(x)objFuncMap(dataIn,x,ub(1),lb(1),smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting),beta0,options);
             end
 
             % Clock the timer and save the fitting time
@@ -195,64 +205,99 @@ switch solver
             % Find the best elastic parameter
             [~,idx] = min(residual_dist_elastic,[],'omitnan');
             beta_in(1) = beta_dist_elastic(:,idx);
+            
+            % Adjust random starting range
+            delt = abs(ub_rand(1)-lb_rand(1))/2;
+            ub_rand(modulusInds) = round(log10(beta_in(1)))+delt;
+            lb_rand(modulusInds) = round(log10(beta_in(1)))-delt;
+            
         end
 
         % See which parameters are new this time, so that
         % information can be fed to our
         % random-guess-generation function
         newInds = isnan(beta_in);
-
+        
         for k = 1:n_iterations
             % Get the grid search starting position
             beta0 = makeRandomParams(beta_in,ub_rand,lb_rand,elasticSetting,fluidSetting,newInds);
             beta0_dist(:,k) = beta0;
-            [beta_dist(:,k),residual_dist(k)] = fminsearch(@(x)objFuncMap(dataIn,x,smoothOpt,windowsize,elasticSetting,fluidSetting),beta0,options);
+            [beta_dist(:,k),residual_dist(k)] = fminsearch(@(x)objFuncMap(dataIn,x,ub,lb,smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting),beta0,options);
         end
         
-        % Observe Smoothing Results!
-        try
-            figure(hfig)
-            clf;
-        catch
-            hfig = figure;
-        end
-        tiledlayout(1,3);
-        omega = 2*pi*f_hz;
-        [Q_storage,Q_loss] = getZModels('maxwell',n_terms,alphaInit);
-        
-        nexttile
-        plot(dataIn{4},dataIn{3},'b-','linewidth',3)
-        hold on
-        plot(h_t,F_t,'r-','linewidth',3)
-        xlabel('Indentation [m]')
-        ylabel('Force [N]')
-        legend('Original','Corrected','location','best')
-        grid on
-        hold off
-        
-        nexttile
-        scatter(f_hz,real(Q_hz),'bo','linewidth',3)
-        hold on
-        plot(f_hz,Q_storage(beta0_dist(:,k),omega),'b-','linewidth',3)
-        plot(f_hz,Q_storage(beta_dist(:,k),omega),'b-','linewidth',3)
-        xlabel('Frequency [Hz]')
-        ylabel('Storage Modulus [Pa]')
-        legend('Data','Initial Fit','Final Fit','location','best')
-        grid on
-        hold off
-        
-        nexttile
-        scatter(f_hz,abs(imag(Q_hz)),'bo','linewidth',3)
-        hold on
-        plot(f_hz,Q_loss(beta0_dist(:,k),omega),'b-','linewidth',3)
-        plot(f_hz,Q_loss(beta_dist(:,k),omega),'b-','linewidth',3)
-        xlabel('Frequency [Hz]')
-        ylabel('Loss Modulus [Pa]')
-        legend('Data','Initial Fit','Final Fit','location','best')
-        grid on
-        hold off
-        
-        disp('pause');
+%         % Observe Smoothing Results!
+%         try
+%             figure(hfig)
+%             clf;
+%         catch
+%             hfig = figure;
+%         end
+%         tiledlayout(1,4);
+%         
+%         % Find the best-fit parameters from our population
+%         [~,idx] = min(residual_dist,[],'omitnan');
+%         if size(idx,2)>1
+%             idx = (idx(1));
+%         end
+%         
+%         omega = linspace(-pi,pi,numel(Q_hz));
+%         omega = omega(omega>=0);
+%         [Q_func,Q_storage,Q_loss] = getZModels('maxwell',n_terms,alphaInit);
+%         
+%         plotParams = beta_dist(:,idx);
+% %         plotParams = [1e4 0 1e4 5e-4];
+%         
+%         nexttile
+%         plot(dataIn{4},dataIn{3},'b-','linewidth',3)
+%         hold on
+%         plot(h_t,F_t,'r-','linewidth',3)
+% %         plot(h_t,LR_Maxwell(beta0_dist(:,idx),dataIn{1},dataIn{2},...
+% %             dataIn{4},dataIn{5},dataIn{6},dataIn{7},elasticSetting,...
+% %             fluidSetting,dataIn{9},dataIn{10}),'g-','linewidth',2);
+%         plot(h_t,LR_Maxwell(plotParams,dataIn{1},dataIn{2},dataIn{4},...
+%             dataIn{5},dataIn{6},dataIn{7},elasticSetting,fluidSetting,...
+%             dataIn{9},dataIn{10}),'k-','linewidth',2);
+%         xlabel('Indentation [m]')
+%         ylabel('Force [N]')
+% %         legend('Original','Corrected','Initial Fit','Final Fit','location','best')
+%         legend('Original','Corrected','Final Fit','location','best')
+%         grid on
+%         hold off
+%         
+%         nexttile
+%         scatter(f_hz(f_hz>=0),Q_hz(f_hz>=0),'bo','linewidth',3)
+%         hold on
+%         plot(f_hz((end-numel(omega)+1):end),Q_func(beta0_dist(:,idx),omega),'b-','linewidth',3)
+%         plot(f_hz((end-numel(omega)+1):end),Q_func(plotParams,omega),'r-','linewidth',3)
+%         xlabel('Frequency [Hz]')
+%         ylabel('Relaxance [Pa]')
+%         legend('Data','Initial Fit','Final Fit','location','best')
+%         grid on
+%         hold off
+%         
+%         nexttile
+%         scatter(f_hz(f_hz>=0),real(Q_hz(f_hz>=0)),'bo','linewidth',3)
+%         hold on
+%         plot(f_hz((end-numel(omega)+1):end),Q_storage(beta0_dist(:,idx),omega),'b-','linewidth',3)
+%         plot(f_hz((end-numel(omega)+1):end),Q_storage(plotParams,omega),'r-','linewidth',3)
+%         xlabel('Frequency [Hz]')
+%         ylabel('Storage Modulus [Pa]')
+%         legend('Data','Initial Fit','Final Fit','location','best')
+%         grid on
+%         hold off
+%         
+%         nexttile
+%         scatter(f_hz(f_hz>=0),abs(imag(Q_hz(f_hz>=0))),'bo','linewidth',3)
+%         hold on
+%         plot(f_hz((end-numel(omega)+1):end),Q_loss(beta0_dist(:,idx),omega),'b-','linewidth',3)
+%         plot(f_hz((end-numel(omega)+1):end),Q_loss(plotParams,omega),'r-','linewidth',3)
+%         xlabel('Frequency [Hz]')
+%         ylabel('Loss Modulus [Pa]')
+%         legend('Data','Initial Fit','Final Fit','location','best')
+%         grid on
+%         hold off
+%         
+%         disp('pause');
         
     case 'annealing'
 
@@ -286,7 +331,7 @@ switch solver
             for k = 1:n_iterations
                 % Get the grid search starting position
                 beta0 = getfield(logspace(ub_rand(1),lb_rand(1),n_iterations),{k});
-                [beta_dist_elastic(k),residual_dist_elastic(k)] = fminsearch(@(x)objFuncMap(dataIn,x,smoothOpt,windowsize,elasticSetting,fluidSetting),beta0,nelderopts);
+                [beta_dist_elastic(k),residual_dist_elastic(k)] = fminsearch(@(x)objFuncMap(dataIn,x,ub(1),lb(1),smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting),beta0,nelderopts);
             end
 
             % Clock the timer and save the fitting time
@@ -307,7 +352,7 @@ switch solver
             % Get the grid search starting position
             beta0 = makeRandomParams(beta_in,ub_rand,lb_rand,elasticSetting,fluidSetting,newInds);
             beta0_dist(:,k) = beta0;
-            [beta_dist(:,k),residual_dist(k)] = annealOpt(@(x)objFuncMap(dataIn,x,smoothOpt,windowsize,elasticSetting,fluidSetting),beta0,annealopts,nelderopts);
+            [beta_dist(:,k),residual_dist(k)] = annealOpt(@(x)objFuncMap(dataIn,x,ub,lb,smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting),beta0,annealopts,nelderopts);
         end
 
     case 'nls'
@@ -316,9 +361,10 @@ switch solver
                         'MaxFunctionEvaluations', n_fitIterations,...
                         'MaxIterations', n_fitIterations,...
                         'FiniteDifferenceType','central',...
-                        'FunctionTolerance', 1e-60,...
-                        'OptimalityTolerance', 1e-60,...
-                        'Display', 'none');
+                        'FunctionTolerance', 0,...
+                        'OptimalityTolerance', 1e-30,...
+                        'StepTolerance', 1e-10,...
+                        'Display', 'iter-detailed');
 
         if n_terms == 1 && elasticSetting
             % Fit the elastic term separately for the first
@@ -332,7 +378,7 @@ switch solver
             for k = 1:n_iterations
                 % Get the grid search starting position
                 beta0 = getfield(logspace(ub_rand(1),lb_rand(1),n_iterations),{k});
-                [beta_dist_elastic(k),residual_dist_elastic(k)] = fmincon(@(x)objFuncMap(dataIn,x,smoothOpt,windowsize,elasticSetting,fluidSetting),beta0,[],[],[],[],lb(1),ub(1),[],fminoptions);
+                [beta_dist_elastic(k),residual_dist_elastic(k)] = fmincon(@(x)objFuncMap(dataIn,x,ub(1),lb(1),smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting),beta0,[],[],[],[],lb(1),ub(1),[],fminoptions);
             end
 
             % Clock the timer and save the fitting time
@@ -353,9 +399,9 @@ switch solver
             % Get the grid search starting position
             beta0 = makeRandomParams(beta_in,ub_rand,lb_rand,elasticSetting,fluidSetting,newInds);
             beta0_dist(:,k) = beta0;
-            [beta_dist(:,k),residual_dist(k)] = fmincon(@(x)objFuncMap(dataIn,x,smoothOpt,windowsize,elasticSetting,fluidSetting),beta0,[],[],[],[],lb,ub,[],fminoptions);
+            [beta_dist(:,k),residual_dist(k)] = fmincon(@(x)objFuncMap(dataIn,x,ub,lb,smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting),beta0,[],[],[],[],lb,ub,[],fminoptions);
         end
-
+        
     otherwise
         error('That solver is not supported.')
         

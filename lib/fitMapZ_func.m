@@ -49,7 +49,7 @@ smoothOpt = 'none';         % Which smoothing setting to use on the harmonics.
                             % Options: none, g-time, ma-time, g-hz, ma-hz
                             % *-time smooths before z-transform. *-hz will
                             % smooth after z-transforming F and h.
-windowsize = 10;            % Window size for smoothing methods
+windowsize = 0.05;          % Window size for smoothing methods
 
 if ~isempty(varargin)
     % Only one varargin is accepted, and it is a structure
@@ -197,17 +197,18 @@ for i = 1:n_pixels
 end
 
 % Determine which pixels to ignore, if hideSubstrate == true
+% If not hiding the substrate, we still need to know which pixels WOULD be
+% substrate, so we know NOT to use the thin sample correction there.
+[minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
+substrateCutoff = minHeight + 100e-9;
+pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
+pixelsToRemove = false(size(pixelHeightArray));
+pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
+
+pixelSkip = 1:numel([fitClass.pixelHeight_cell{:}]);
+pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
+    
 if hideSubstrate
-    [minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
-    substrateCutoff = minHeight + 100e-9;
-    pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
-    pixelOrder = 1:numel(fitClass.pixelHeight_cell);
-    pixelsToRemove = false(size(pixelHeightArray));
-    pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
-    
-    pixelSkip = 1:numel([fitClass.pixelHeight_cell{:}]);
-    pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
-    
     fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during fitting.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
     
 %     % Look at the data in 2D
@@ -227,11 +228,6 @@ if hideSubstrate
 %     hold on
 %     scatter3(X(pixelsToRemove3D),Y(pixelsToRemove3D),Z(pixelsToRemove3D),10,'r')
 %     hold off
-
-else
-    
-    % No pixels to skip!
-    pixelSkip = [];
     
 end
 
@@ -280,7 +276,7 @@ for i = 1:n_elements
     paramLen = length(bestParamsMap{1});
     
     % Original
-    for j = 1:n_pixels
+    parfor j = 1:n_pixels
         % Check if the pixel should be skipped
         if hideSubstrate
             if any(ismember(j,pixelSkip))
@@ -303,6 +299,22 @@ for i = 1:n_elements
                     frequencyMap(j) = {NaN};
                 end
                 continue;
+            else
+                if any(ismember(j,pixelSkip))
+                    % This pixel WOULD be substrate
+                    thinPixel = false;
+                else
+                    % This is a sample pixel. Use the user-desired setting
+                    thinPixel = dataIn{j}{9};
+                end
+            end
+        else
+            if any(ismember(j,pixelSkip))
+                % This pixel WOULD be substrate
+                thinPixel = false;
+            else
+                % This is a sample pixel. Use the user-desired setting
+                thinPixel = dataIn{j}{9};
             end
         end
         
@@ -335,7 +347,7 @@ for i = 1:n_elements
             paramPopulationMap(j),...
             paramPopulationResidualsMap(j),...
             elasticFitTimeMap(j),...
-            fitTimeMap(j)] = fitPixelZ(i,n_iterations,model,solver,n_fitIterations,minTimescaleTemp,dataIn(j),paramLen,objFuncMap,elasticSetting,fluidSetting,bestParamsMap{j},smoothOpt,windowsize);
+            fitTimeMap(j)] = fitPixelZ(i,n_iterations,model,solver,n_fitIterations,minTimescaleTemp,dataIn(j),paramLen,objFuncMap,elasticSetting,fluidSetting,bestParamsMap{j},smoothOpt,windowsize,thinPixel);
         
     end
 

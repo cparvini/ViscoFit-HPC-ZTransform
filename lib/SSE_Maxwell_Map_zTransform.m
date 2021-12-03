@@ -1,4 +1,4 @@
-function sse = SSE_Maxwell_Map_zTransform(data,params,smoothOpt,windowsize,elasticSetting,fluidSetting)
+function sse = SSE_Maxwell_Map_zTransform(data,params,ub,lb,smoothOpt,windowsize,thinPixel,elasticSetting,fluidSetting)
     %SSE_Maxwell Calculate the SSE for the Maxwell model using the
     %Z-Transform approach
     %   Calculate the Sum of Squared Errors for the Generalized
@@ -13,21 +13,32 @@ function sse = SSE_Maxwell_Map_zTransform(data,params,smoothOpt,windowsize,elast
     %   Sum of Squared Errors for that particular pixel.
     
     % Get Z-Transform Data from Curve
-    [Q_hz,F_t,~,h_t,~,f_hz,alphaInit] = zTransformCurve(data,smoothOpt,windowsize);
-    
-    % Define Equations
-    Q_hz = Q_hz(f_hz>=0);
-    f_hz = f_hz(f_hz>=0);
-    omega = (2.*pi.*f_hz);
+    [Q_hz,F_t,~,h_t,~,~,alphaInit] = zTransformCurve(data,smoothOpt,windowsize,thinPixel);
 
     % Get functions
-    n_terms = (numel(params)-2)/2;
-    [Q_storage,Q_loss] = getZModels('maxwell',n_terms,alphaInit);
+    n_terms = max((numel(params)-2)/2,0);
+    [Q_func,Q_storage,Q_loss] = getZModels('maxwell',n_terms,alphaInit);
     
     % Calculate harmonics
-    Qloss_hz = abs(imag(Q_hz));
-    Qstorage_hz = real(Q_hz);
+    omega = linspace(-pi,pi,numel(Q_hz));
+    Qloss_hz = abs(imag(Q_hz(omega>=0)));
+    Qstorage_hz = real(Q_hz(omega>=0));
+    Q_hz = Q_hz(omega>=0);
+    omega = omega(omega>=0);
     
+    % Trim negative (unphysical) numbers
+    inds = find(or(or(Q_hz<0,Qloss_hz<0),Qstorage_hz<0));
+    omega(inds) = [];
+    Q_hz(inds) = [];
+    Qloss_hz(inds) = [];
+    Qstorage_hz(inds) = [];
+    
+    % Error weighting (if desired)
+%     weightsHz = ones(size(omega));
+    weightsHz = normpdf(linspace(0,10,numel(omega)),0,0.5);
+%     weightsT = ones(size(F_t));
+    weightsT = flip(normpdf(linspace(0,5,numel(F_t)),0,1.5));
+
 %     % Check the output!
 %     try 
 %         figure(hfig);
@@ -52,19 +63,19 @@ function sse = SSE_Maxwell_Map_zTransform(data,params,smoothOpt,windowsize,elast
 %     hold off
 % 
 %     nexttile
-%     plot(f_hz,real(Q_hz),'b-','linewidth',3)
+%     plot(omega,Qstorage_hz,'b-','linewidth',3)
 %     hold on
-%     plot(f_hz,Q_storage(params,omega),'g-','linewidth',3)
-%     xlabel('Frequency [Hz]')
+%     plot(omega,Q_storage(params,omega),'g-','linewidth',3)
+%     xlabel('Angle [radians]')
 %     ylabel('Storage Modulus [Pa]')
 %     legend('Data','Fit')
 %     hold off
 % 
 %     nexttile
-%     plot(f_hz,abs(imag(Q_hz)),'b-','linewidth',3)
+%     plot(omega,Qloss_hz,'b-','linewidth',3)
 %     hold on
-%     plot(f_hz,Q_loss(params,omega),'g-','linewidth',3)
-%     xlabel('Frequency [Hz]')
+%     plot(omega,Q_loss(params,omega),'g-','linewidth',3)
+%     xlabel('Angle [radians]')
 %     ylabel('Loss Modulus [Pa]')
 %     legend('Data','Fit')
 %     hold off
@@ -72,26 +83,26 @@ function sse = SSE_Maxwell_Map_zTransform(data,params,smoothOpt,windowsize,elast
 %     disp('pause');
     
     % calculate global residual
-    sse = sum((vertcat(Qstorage_hz,Qloss_hz)-vertcat(Q_storage(params,omega),Q_loss(params,omega))).^2,'all');
-
-    [tauInds,modulusInds] = getParamIndices(params);
-    ub = zeros(size(params))+eps;
-    lb = zeros(size(params));
-
-    ub(modulusInds) = 1e12;
-    lb(modulusInds) = 1e-2;
-
-    tauCenters = data{8}.*(10.^( (1:length(params(3:2:end)))-1 ));
-    ub(tauInds) = tauCenters*10;
-    lb(tauInds) = tauCenters/10;
-
-    if length(params) > 1
-        if fluidSetting
-            ub(2) = max(tauCenters)*1e2;
-            lb(2) = min(data{2});
+    SError = @(ydata,ymodel,weights) sqrt( sum( weights.*(((ydata-ymodel).^2) ./ (numel(ydata) - 2)), 'all') ); % Standard Error
+%     sse = sum(weights.*((vertcat(Qstorage_hz,Qloss_hz)-vertcat(Q_storage(params,omega),Q_loss(params,omega))).^2),'all');
+%     sse = SError(vertcat(Qstorage_hz,Qloss_hz),vertcat(Q_storage(params,omega),Q_loss(params,omega)));
+    sse = abs(SError(Q_hz,Q_func(params,omega),weightsHz)/rms(Q_hz))+...
+        abs(SError(Qloss_hz,Q_loss(params,omega),weightsHz)/rms(Qloss_hz))+...
+        abs(SError(Qstorage_hz,Q_storage(params,omega),weightsHz)/rms(Qstorage_hz))+...
+        abs(SError(F_t,LR_Maxwell(params,data{1},data{2},...
+            h_t,data{5},data{6},data{7},elasticSetting,fluidSetting,...
+            data{9},data{10}),weightsT)/rms(F_t));
+    
+    ids = true(size(params));
+    if ~elasticSetting
+        ids(1) = false;
+    end
+    if numel(params) > 1
+        if ~fluidSetting
+            ids(2) = false;
         end
     end
-
+    
     if any(ub-params < 0) || any(params-lb < 0)
         sse = Inf;
     end

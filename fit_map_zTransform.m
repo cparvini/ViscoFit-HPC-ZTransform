@@ -247,24 +247,26 @@ for i_dir = 1:length(Folders)
 
         % Make a structure for our settings
         fitSettings = struct;
-
+        
         % Test the Maxwell
         fitSettings.solver = 'nelder-mead';                 % Fit using Nelder-Mead Simplex
         fitSettings.model = 'maxwell';                      % Use Generalized Maxwell Model
         fitSettings.n_elements = 3;                         % Fit iteratively for up to 3 elements
         fitSettings.elasticSetting = 1;                     % Include Elastic Term
         fitSettings.fluidSetting = 0;                       % No Steady-State Fluidity
-        fitSettings.n_iterations = 1;                       % Use 10 random initializations
-        fitSettings.n_fitIterations = 1e3;                  % No. of iterations for solver
-        fitSettings.errortype = 'mse';                      % Use Mean-Squared Error during fitting
+        fitSettings.n_iterations = 50;                      % Use 50 random initializations
+        fitSettings.n_fitIterations = 2e3;                  % No. of iterations for solver
+        fitSettings.errortype = 'mse';                      % Use Mean-Squared Error if fitting using the CLASS functions
         fitSettings.N_workers = N_workers;                  % Pass the number of workers to the fitting
         fitSettings.hideSubstrate = viscoZ.hideSubstrate;   % Remove pixels designated as "substrate" from the visco fitting
         fitSettings.minTimescale = viscoZ.minTimescale;     % Timescale for the first viscoelastic element
-        fitSettings.smoothOpt = 'none';                     % Which smoothing setting to use on the harmonics.
+        fitSettings.smoothOpt = 'none';                     % Which smoothing setting to use on the harmonics FOR FITTING ONLY!
+                                                            % Raw data is saved to the output structure regardless of what the user puts here.
+                                                            % This will filter the data, then use that as the input ONLY for optimizing a model.
                                                             % Options: none, g-time, ma-time, g-hz, ma-hz
                                                             % *-time smooths before z-transform. *-hz will
                                                             % smooth after z-transforming F and h.
-        fitSettings.windowsize = 10;                        % Window size for smoothing methods
+        fitSettings.windowsize = 0.10;                      % (ratio) Fraction of dataset length to use for window size for smoothing methods
         
         maxwellFit_zTransform = fitMapZ_func(viscoZ,fitSettings);
         maxwellFit_zTransform.mapSize = mode(cat(1,mapSize{:}),1);
