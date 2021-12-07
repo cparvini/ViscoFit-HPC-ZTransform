@@ -423,7 +423,7 @@ for k = 1:length(Files)
                 % is introduced as a row in the dataStruct, with an ID column
                 % that will store separate maps with unique IDs so the data can
                 % be separated later on.
-                oldMaps = dir([Files(k).folder sprintf('/mapStruct-%s.mat',FileInfo{1})]);
+                oldMaps = dir([Files(k).folder filesep sprintf('mapStruct-%s.mat',FileInfo{1})]);
 
                 if isempty(oldMaps)
                     tic
@@ -432,7 +432,7 @@ for k = 1:length(Files)
                     fprintf('\nIt took %6.2f minutes to load %s.\n',loadTime/60,Files(k).name)
                     save([Files(k).folder filesep sprintf('mapStruct-%s.mat',FileInfo{1})],'fileStruct');
                 else
-                    load([oldMaps.folder filesep oldMaps.name],'fileStruct'); % Load the previous filestruct!
+                    load([oldMaps.folder filesep oldMaps.name]); % Load the previous filestruct!
                 end
                 numPixels = length(fileStruct);
                 indShift = size(dataStruct,2);
