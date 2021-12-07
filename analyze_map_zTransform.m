@@ -113,7 +113,7 @@ for i_dir = 1:length(Folders)
     
     % Required Settings:
     loadDataSettings.includeRetract = false;         % Don't include data from the retract curve
-    loadDataSettings.filterType = 'FIR';             % Choose the filter used to smooth data
+    loadDataSettings.filterType = 'none';            % Choose the filter used to smooth data
     loadDataSettings.findRep = 'legendre';           % Search direction for the repulsive region
     loadDataSettings.removeNegatives = true;         % Remove negative values in the force
     loadDataSettings.createAverage = false;          % Create averaged rows at the END of the datastruct
@@ -245,7 +245,7 @@ for i_dir = 1:length(Folders)
         extractionSettings = struct;
         extractionSettings.N_workers = N_workers;                   % Pass the number of workers to the fitting
         extractionSettings.hideSubstrate = viscoZ.hideSubstrate;    % Remove pixels designated as "substrate" from the visco fitting
-        extractionSettings.windowsize = 10;                         % Window size for smoothing methods
+        extractionSettings.windowsize = 0.05;                       % Window size for smoothing methods
         extractionSettings.smoothOpt = 'none';                      % Which smoothing setting to use on the harmonics.
                                                                     % Options: none, g-time, ma-time, g-hz, ma-hz
                                                                     % *-time smooths before z-transform. *-hz will

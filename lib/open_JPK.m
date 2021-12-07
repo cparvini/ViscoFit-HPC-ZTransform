@@ -408,15 +408,17 @@ if(strcmpi(extension,valid_extensions{1}))
     [~,index] = sortrows({Image.Channel_name}.'); Image = Image(index); clear index
     varargout{1}=Image;
     varargout{2}=Details_Img;
-    varargout{3}=AFM_file_path;
+    varargout{3}=complete_path_to_afm_file;
 elseif(strcmpi(extension,valid_extensions{2}))
     
     [~,FileName,~]=fileparts(complete_path_to_afm_file);
-    if ~exist('ForceCurvesMatalabExtracted', 'dir')
-        mkdir([tempdir 'ForceCurvesMatalabExtracted'])
+    newTempdir = [ctfroot filesep 'ForceCurvesMatalabExtracted'];
+    newFiledir = [newTempdir filesep sprintf('%s',FileName)];
+    if ~exist(newTempdir, 'dir')
+        mkdir(newTempdir)
     end
-    unzip(complete_path_to_afm_file,sprintf('ForceCurvesMatalabExtracted%s%s',filesep,FileName))
-    InfoDir=dir(sprintf('ForceCurvesMatalabExtracted%s%s',filesep,FileName));
+    unzip(complete_path_to_afm_file,newFiledir)
+    InfoDir=dir(newFiledir);
     InfoDirSize=size(InfoDir,1);
     
     index_header=find(strcmp({InfoDir.name},'shared-data')==1);
@@ -477,7 +479,7 @@ elseif(strcmpi(extension,valid_extensions{2}))
     end
     [~,index] = sortrows({FC_Data.Channel_name}.'); FC_Data = FC_Data(index); clear index
     z=1;
-    InfoDir_Segments=dir(sprintf('ForceCurvesMatalabExtracted%s%s%s%s',filesep,FileName,filesep,'segments'));
+    InfoDir_Segments=dir([newTempdir sprintf('%s%s%s%s',filesep,FileName,filesep,'segments')]);
     for i=1:size(InfoDir_Segments,1)
         if(~isnan(str2double(InfoDir_Segments(i).name)))
             folderToEval(1,z)=i;
@@ -488,7 +490,7 @@ elseif(strcmpi(extension,valid_extensions{2}))
     Channel_Name_Imprint_Encoded=sprintf('%s_%s','Data','Encoded');
     F_Names_FC_Data=fieldnames(FC_Data);
     for i=1:size(folderToEval,2)
-        Info_location=fullfile('ForceCurvesMatalabExtracted',FileName,'segments',InfoDir_Segments(folderToEval(1,i)).name,'segment-header.properties');
+        Info_location=fullfile(newTempdir,FileName,'segments',InfoDir_Segments(folderToEval(1,i)).name,'segment-header.properties');
         fid=fopen(Info_location);
         segment_metadata_raw=textscan(fid,'%s');
         fclose(fid);
@@ -499,7 +501,7 @@ elseif(strcmpi(extension,valid_extensions{2}))
                 break
             end
         end
-        Temp_InfoDir_Segments=dir(sprintf('ForceCurvesMatalabExtracted%s%s%s%s%s%s%s%s',filesep,FileName,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels'));
+        Temp_InfoDir_Segments=dir([newTempdir sprintf('%s%s%s%s%s%s%s%s',filesep,FileName,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels')]);
         [~,index1] = sortrows({Temp_InfoDir_Segments.name}.'); Temp_InfoDir_Segments = Temp_InfoDir_Segments(index1); clear index1
         j=1;
         while (j<=size(Temp_InfoDir_Segments,1))
@@ -534,7 +536,7 @@ elseif(strcmpi(extension,valid_extensions{2}))
         end
         
         for j=1:size(Temp_InfoDir_Segments,1)
-            fid=fopen(sprintf('ForceCurvesMatalabExtracted%s%s%s%s%s%s%s%s%s%s',filesep,FileName,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels',filesep,Temp_InfoDir_Segments(j).name));
+            fid=fopen([newTempdir sprintf('%s%s%s%s%s%s%s%s%s%s',filesep,FileName,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels',filesep,Temp_InfoDir_Segments(j).name)]);
             flag_temp=fread(fid,'int32',0,'b');
             fclose(fid);
             temp=strsplit(Temp_InfoDir_Segments(j).name,'.');
@@ -561,15 +563,17 @@ elseif(strcmpi(extension,valid_extensions{2}))
 elseif(strcmpi(extension,valid_extensions{4}))
     
     [~,FileName,~]=fileparts(complete_path_to_afm_file);
-    if ~exist('ForceCurvesMatalabExtracted', 'dir')
-        mkdir([tempdir 'ForceCurvesMatalabExtracted'])
+    newTempdir = [ctfroot filesep 'ForceCurvesMatalabExtracted'];
+    newFiledir = [newTempdir filesep sprintf('%s',FileName)];
+    if ~exist(newTempdir, 'dir')
+        mkdir(newTempdir)
     end
-    unzip(complete_path_to_afm_file,sprintf('ForceCurvesMatalabExtracted%s%s',filesep,FileName))
-    InfoDir=dir(sprintf('ForceCurvesMatalabExtracted%s%s',filesep,FileName));
+    unzip(complete_path_to_afm_file,newFiledir)
+    InfoDir=dir(newFiledir);
     idx_header = find(strcmp({InfoDir(:).name},'header.properties'),1);
     
     % Count the number of pixels
-    InfoPixels = dir(sprintf('ForceCurvesMatalabExtracted%s%s%sindex',filesep,FileName,filesep));
+    InfoPixels = dir([newFiledir filesep 'index']);
     InfoPixels(strcmp({InfoPixels(:).name},'.')) = [];
     InfoPixels(strcmp({InfoPixels(:).name},'..')) = [];
     nPixels = size(InfoPixels,1);
@@ -578,9 +582,10 @@ elseif(strcmpi(extension,valid_extensions{4}))
     
     % Begin loading all of the pixel data
     for i_pix = 1:nPixels
-                
-        if ~isfolder(sprintf('ForceCurvesMatalabExtracted%s%s%sindex%s%d',filesep,FileName,filesep,filesep,i_pix-1)) || ...
-                isempty(dir(sprintf('ForceCurvesMatalabExtracted%s%s%sindex%s%d',filesep,FileName,filesep,filesep,i_pix-1)))
+        
+        newPixdir = [newFiledir filesep 'index' filesep sprintf('%d',i_pix-1)];
+        if ~isfolder(newPixdir) || ...
+                isempty(dir(newPixdir))
             fprintf('Skipped Pixel %d (No Data)\n',i_pix-1);
             continue;
         end
@@ -663,7 +668,7 @@ elseif(strcmpi(extension,valid_extensions{4}))
         end
         [~,index] = sortrows({FC_Data.Channel_name}.'); FC_Data = FC_Data(index); clear index
         z=1;
-        InfoDir_Segments=dir(sprintf('ForceCurvesMatalabExtracted%s%s%sindex%s%d%s%s',filesep,FileName,filesep,filesep,i_pix-1,filesep,'segments'));
+        InfoDir_Segments=dir([newTempdir sprintf('%s%s%sindex%s%d%s%s',filesep,FileName,filesep,filesep,i_pix-1,filesep,'segments')]);
         for i=1:size(InfoDir_Segments,1)
             if(~isnan(str2double(InfoDir_Segments(i).name)))
                 folderToEval(1,z)=i;
@@ -674,7 +679,7 @@ elseif(strcmpi(extension,valid_extensions{4}))
         Channel_Name_Imprint_Encoded=sprintf('%s_%s','Data','Encoded');
         F_Names_FC_Data=fieldnames(FC_Data);
         for i=1:size(folderToEval,2)
-            Info_location=fullfile('ForceCurvesMatalabExtracted',FileName,'index',num2str(i_pix-1),'header.properties');
+            Info_location=fullfile(newTempdir,FileName,'index',num2str(i_pix-1),'header.properties');
             fid=fopen(Info_location);
             pixel_metadata_raw=textscan(fid,'%s');
             fclose(fid);
@@ -693,7 +698,7 @@ elseif(strcmpi(extension,valid_extensions{4}))
                 end
             end
             
-            Temp_InfoDir_Segments=dir(sprintf('ForceCurvesMatalabExtracted%s%s%s%s%s%d%s%s%s%s%s%s',filesep,FileName,filesep,'index',filesep,i_pix-1,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels'));
+            Temp_InfoDir_Segments=dir([newTempdir sprintf('%s%s%s%s%s%d%s%s%s%s%s%s',filesep,FileName,filesep,'index',filesep,i_pix-1,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels')]);
             [~,index1] = sortrows({Temp_InfoDir_Segments.name}.'); Temp_InfoDir_Segments = Temp_InfoDir_Segments(index1); clear index1
             j=1;
             while (j<=size(Temp_InfoDir_Segments,1))
@@ -729,7 +734,7 @@ elseif(strcmpi(extension,valid_extensions{4}))
 
             for j=1:size(Temp_InfoDir_Segments,1)
                 
-                fid=fopen(sprintf('ForceCurvesMatalabExtracted%s%s%s%s%s%d%s%s%s%s%s%s%s%s',filesep,FileName,filesep,'index',filesep,i_pix-1,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels',filesep,Temp_InfoDir_Segments(j).name));
+                fid=fopen([newTempdir sprintf('%s%s%s%s%s%d%s%s%s%s%s%s%s%s',filesep,FileName,filesep,'index',filesep,i_pix-1,filesep,'segments',filesep,InfoDir_Segments(folderToEval(1,i)).name,filesep,'channels',filesep,Temp_InfoDir_Segments(j).name)]);
                 flag_temp=fread(fid,'int32',0,'b');
                 fclose(fid);
                 temp=strsplit(Temp_InfoDir_Segments(j).name,'.');
@@ -834,6 +839,6 @@ delete(F);
 clearvars F
 
 % Memory management. CRITICAL for big map files!!!
-rmdir(['ForceCurvesMatalabExtracted' filesep FileName],'s')
+rmdir([newTempdir filesep FileName],'s')
 
 end

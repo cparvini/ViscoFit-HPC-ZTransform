@@ -23,7 +23,7 @@ smoothOpt = 'none';         % Which smoothing setting to use on the harmonics.
                             % Options: none, g-time, ma-time, g-hz, ma-hz
                             % *-time smooths before z-transform. *-hz will
                             % smooth after z-transforming F and h.
-windowsize = 10;            % Window size for smoothing methods
+windowsize = 0.05;          % Window size for smoothing methods
 
 if ~isempty(varargin)
     % Only one varargin is accepted, and it is a structure
