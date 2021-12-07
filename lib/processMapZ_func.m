@@ -87,7 +87,7 @@ for i = 1:n_pixels
 end
 
 % Determine which pixels to ignore, if hideSubstrate == true
-if hideSubstrate
+% if hideSubstrate
     [minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
     substrateCutoff = minHeight + 100e-9;
     pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
@@ -98,7 +98,9 @@ if hideSubstrate
     pixelSkip = 1:numel([fitClass.pixelHeight_cell{:}]);
     pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
     
-    fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during fitting.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
+    if hideSubstrate
+        fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during fitting.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
+    end
     
 %     % Look at the data in 2D
 %     figure
@@ -118,12 +120,12 @@ if hideSubstrate
 %     scatter3(X(pixelsToRemove3D),Y(pixelsToRemove3D),Z(pixelsToRemove3D),10,'r')
 %     hold off
 
-else
-    
-    % No pixels to skip!
-    pixelSkip = [];
-    
-end
+% else
+%     
+%     % No pixels to skip!
+%     pixelSkip = [];
+%     
+% end
 
 % Don't perform fitting, only smoothing the Z-Transform results
 fprintf('\nBeginning Map Analysis (No Fitting):\n');
@@ -153,8 +155,20 @@ parfor j = 1:n_pixels
         continue;
     end
     
+    % Pass along the correct thinSample setting
+    if any(ismember(j,pixelSkip))
+        % This is the "substrate" trigger! If we are in this statement, the
+        % pixel IS a substrate curve and we should NOT allow the
+        % thinSample setting to be passed along.
+        thinPixelLoop = false;
+    else
+        % This is the "cell surface" trigger! We will allow the user's
+        % desired setting to be passed along.
+        thinPixelLoop = dataIn{j}{9};
+    end
+    
     % Get Z-Transform Data from Curve
-    [Q_hz,~,~,~,~,f_hz,alphaInit] = zTransformCurve(dataIn{j},smoothOpt,windowsize);
+    [Q_hz,~,~,~,~,f_hz,alphaInit] = zTransformCurve(dataIn{j},smoothOpt,windowsize,thinPixelLoop);
     
     U_hz = 1./(Q_hz);
     relaxanceMap(j) = {Q_hz};
