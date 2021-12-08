@@ -80,7 +80,7 @@ FilesCheck(toRemove) = [];
 toRemove = find(contains({FilesCheck.name}, {'settingsStruct','Settings'}));
 FilesCheck(toRemove) = [];
 
-toRemove = find(contains({FilesCheck.name}, {'FitResults','PlotResults','mapStruct','log.txt'}));
+toRemove = find(contains({FilesCheck.name}, {'FitResults','MapResults','PlotResults','mapStruct','log.txt'}));
 FilesCheck(toRemove) = [];
 
 for i = 1:length(FilesCheck)
@@ -117,7 +117,7 @@ if length(FilesCheck) > 1
         
         case lower('TestCondition')
             Files=dir([pathname '/*.mat']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults'}));
+            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults'}));
             Files(toRemove) = [];
             for k=1:length(Files)
                 FileNames = Files(k).name;
@@ -130,7 +130,7 @@ if length(FilesCheck) > 1
             
         case lower({'HPAF','HPDE'})
             Files = dir([pathname '/*.jpk-qi-data']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults'}));
+            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
             Files(toRemove) = [];
             for k=1:length(Files)
                 FileNames = Files(k).name;
@@ -140,7 +140,7 @@ if length(FilesCheck) > 1
         otherwise
             if endsWith(FilesCheck.name, {'.jpk-qi-data'})
                 Files = dir([pathname '/*.jpk-qi-data']);
-                toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults'}));
+                toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
                 Files(toRemove) = [];
                 for k=1:length(Files)
                     FileNames = Files(k).name;
@@ -174,7 +174,7 @@ else
 
         case lower('TestCondition')
             Files=dir([pathname '/*.mat']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults'}));
+            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
             Files(toRemove) = [];
             
             FileNames = Files.name;
@@ -186,7 +186,7 @@ else
             
         case lower({'HPAF','HPDE'})
             Files = dir([pathname '/*.jpk-qi-data']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults'}));
+            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
             Files(toRemove) = [];
             
             FileNames = Files.name;
@@ -195,7 +195,7 @@ else
         otherwise
             if endsWith(FilesCheck.name, {'.jpk-qi-data'})
                 Files = dir([pathname '/*.jpk-qi-data']);
-                toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults'}));
+                toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
                 Files(toRemove) = [];
 
                 FileNames = Files.name;
@@ -337,7 +337,7 @@ for k = 1:length(Files)
             % is introduced as a row in the dataStruct, with an ID column
             % that will store separate maps with unique IDs so the data can
             % be separated later on.
-            oldMaps = dir([Files(k).folder sprintf('/mapStruct-%s-%s.mat',FileInfo{1},FileInfo{2})]);
+            oldMaps = dir([Files(k).folder filesep sprintf('mapStruct-%s-%s.mat',FileInfo{1},FileInfo{2})]);
             
             if isempty(oldMaps)
                 tic
