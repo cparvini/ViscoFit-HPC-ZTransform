@@ -413,10 +413,18 @@ elseif(strcmpi(extension,valid_extensions{2}))
     
     [~,FileName,~]=fileparts(complete_path_to_afm_file);
     newTempdir = [ctfroot filesep 'ForceCurvesMatalabExtracted'];
-    newFiledir = [newTempdir filesep sprintf('%s',FileName)];
     if ~exist(newTempdir, 'dir')
-        mkdir(newTempdir)
+        try
+            mkdir(newTempdir)
+        catch
+            % In case you don't have permission
+            newTempdir = [tempdir filesep 'ForceCurvesMatalabExtracted'];
+            if ~exist(newTempdir, 'dir')
+                mkdir(newTempdir)
+            end
+        end
     end
+    newFiledir = [newTempdir filesep sprintf('%s',FileName)];
     unzip(complete_path_to_afm_file,newFiledir)
     InfoDir=dir(newFiledir);
     InfoDirSize=size(InfoDir,1);
@@ -564,10 +572,18 @@ elseif(strcmpi(extension,valid_extensions{4}))
     
     [~,FileName,~]=fileparts(complete_path_to_afm_file);
     newTempdir = [ctfroot filesep 'ForceCurvesMatalabExtracted'];
-    newFiledir = [newTempdir filesep sprintf('%s',FileName)];
     if ~exist(newTempdir, 'dir')
-        mkdir(newTempdir)
+        try
+            mkdir(newTempdir)
+        catch
+            % In case you don't have permission
+            newTempdir = [tempdir filesep 'ForceCurvesMatalabExtracted'];
+            if ~exist(newTempdir, 'dir')
+                mkdir(newTempdir)
+            end
+        end
     end
+    newFiledir = [newTempdir filesep sprintf('%s',FileName)];
     unzip(complete_path_to_afm_file,newFiledir)
     InfoDir=dir(newFiledir);
     idx_header = find(strcmp({InfoDir(:).name},'header.properties'),1);

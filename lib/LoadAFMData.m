@@ -430,7 +430,7 @@ for k = 1:length(Files)
                     fileStruct = open_JPK([Files(k).folder filesep Files(k).name]);
                     loadTime = toc;
                     fprintf('\nIt took %6.2f minutes to load %s.\n',loadTime/60,Files(k).name)
-                    save([Files(k).folder filesep sprintf('mapStruct-%s.mat',FileInfo{1})],'fileStruct');
+                    save([Files(k).folder filesep sprintf('mapStruct-%s.mat',FileInfo{1})],'fileStruct','-v7.3');
                 else
                     load([oldMaps.folder filesep oldMaps.name]); % Load the previous filestruct!
                 end
@@ -802,17 +802,9 @@ for k = 1:size(dataStruct,2)
             idx = [];
         end
         
-        if ~isempty(idx)
-            tip_rep_pos = idx;
-            if idx-delay > 1
-                tip_rep_pos_smooth = idx-delay;
-            else
-                tip_rep_pos_smooth = 2;
-            end
-        else
-            tip_rep_pos = 2;
-            tip_rep_pos_smooth = 2;
-        end
+        % Prevent removing too much data
+        tip_rep_pos = max([idx 2]);
+        tip_rep_pos_smooth = max([idx-delay 2]);
 
 %         % Visualize the contact point estimate!
 %         try 

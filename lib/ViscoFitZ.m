@@ -59,7 +59,7 @@ classdef ViscoFitZ
         forces_cell cell
         times double {mustBePositive}
         times_cell cell
-        dts double {mustBePositive}
+        dts double {mustBeGreaterThanOrEqual(dts,0)}
         dts_cell cell
         indentations double
         indentations_cell cell
@@ -173,13 +173,10 @@ classdef ViscoFitZ
                 obj.indentations = horzcat(indentations{:});
                 obj.indentations_cell = indentations;
 
-                try
-                    temp = cellfun(@(t) round(mode(gradient(t)),1,'significant').*ones(size(t)),times,'UniformOutput',false);
-                    obj.dts = horzcat(temp{:});
-                    obj.dts_cell = temp;
-                catch
-                    disp('pause');
-                end
+                temp = cellfun(@(t) round(mode(gradient(t)),1,'significant').*ones(size(t)),times,'UniformOutput',false);
+                obj.dts = horzcat(temp{:});
+                obj.dts_cell = temp;
+
                 temp = cellfun(@(r,t) r.*ones(size(t)),tipSize,times,'UniformOutput',false);
                 obj.tipSize = horzcat(temp{:});
                 obj.tipSize_cell = temp;

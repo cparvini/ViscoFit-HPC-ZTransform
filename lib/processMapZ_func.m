@@ -99,7 +99,7 @@ end
     pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
     
     if hideSubstrate
-        fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during fitting.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
+        fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during analysis.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
     end
     
 %     % Look at the data in 2D
