@@ -23,6 +23,7 @@ while stillRunning
     figHeight = figWid/(3+plotModel);
     mapColorName = 'parula';
     climMax = 6e5; % Pa
+    n_datapoints = 100;
     
     if plotModel
         mapType = '-Model';
@@ -171,7 +172,7 @@ while stillRunning
                     tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                     tempf = tempf(tempf>lowfreqCutoff);
                     [temp,~] = min(tempf,[],'omitnan');
-                    if any([isnan(temp),isempty(temp)])
+                    if any([isnan(temp),isempty(temp)]) || (numel(resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels})<n_datapoints)
                         continue;
                     end
                     numFreqPoints(k_pixels) = numel(tempf(~isnan(tempf)));
@@ -244,26 +245,30 @@ while stillRunning
                         tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                         temp = temp(tempf>lowfreqCutoff);
                         tempf = tempf(tempf>lowfreqCutoff);
-                        if isempty(temp)
+                        if isempty(temp) || numel(tempf) < 5
                             continue;
                         end
                         
-                        % Resample to known array of frequencies
-%                         ids = ((tempf >= min(freqList)) & (tempf <= max(freqList)));
-                        obsOut = interp1(tempf,temp,freqList,'makima',...
-                            'extrap');
-%                         try
-%                             figure(hfig);
-%                             clf;
-%                         catch
-%                             hfig = figure;
-%                         end
-%                         plot(newFreqs,obsOut,'r')
-%                         hold on
-%                         scatter(tempf,temp,'bo')
-%                         hold off
-                        
-                        kmeansData(k_pixels,:) = obsOut;
+                        try
+                            % Resample to known array of frequencies
+    %                         ids = ((tempf >= min(freqList)) & (tempf <= max(freqList)));
+                            obsOut = interp1(tempf,temp,freqList,'makima',...
+                                NaN);
+    %                         try
+    %                             figure(hfig);
+    %                             clf;
+    %                         catch
+    %                             hfig = figure;
+    %                         end
+    %                         plot(newFreqs,obsOut,'r')
+    %                         hold on
+    %                         scatter(tempf,temp,'bo')
+    %                         hold off
+
+                            kmeansData(k_pixels,:) = obsOut;
+                        catch
+                            continue;
+                        end
                         
                     end                    
                     
@@ -427,7 +432,7 @@ while stillRunning
 %                             [~,idx] = min(abs(freq-freqList(k_freq)));
                             modelRelaxance = modelStorage + 1j*modelLoss;
                             
-                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan'))
+                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan')) || any(isnan(freq))
                                 mapDataStorage(idx_pixel) = NaN;
                                 mapDataLoss(idx_pixel) = NaN;
                                 mapDataAngle(idx_pixel) = NaN;
@@ -440,13 +445,13 @@ while stillRunning
                                 % Resample to known array of frequencies
 %                                 ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
                                 mapDataStorage(idx_pixel) = interp1(freq,modelStorage,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 mapDataLoss(idx_pixel) = interp1(freq,modelLoss,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 mapDataAngle(idx_pixel) = interp1(freq,modelAngle,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                                                 
 %                                 mapDataStorage(idx_pixel) = modelStorage(idx);
 %                                 mapDataLoss(idx_pixel) = modelLoss(idx);
@@ -469,7 +474,7 @@ while stillRunning
                             modelAngle = atand(modelLoss./modelStorage);
                             modelRelaxance = resultsStruct.(varNames{j}).relaxanceMap{k_pixels};
                             
-                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan'))
+                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan')) || any(isnan(freq))
                                 mapDataStorage(idx_pixel) = NaN;
                                 mapDataLoss(idx_pixel) = NaN;
                                 mapDataAngle(idx_pixel) = NaN;
@@ -480,13 +485,13 @@ while stillRunning
                                 % Resample to known array of frequencies
 %                                 ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
                                 mapDataStorage(idx_pixel) = interp1(freq,modelStorage,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 mapDataLoss(idx_pixel) = interp1(freq,modelLoss,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 mapDataAngle(idx_pixel) = interp1(freq,modelAngle,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
-                                    'extrap');
+                                    NaN);
                                 
 %                                 mapDataStorage(idx_pixel) = modelStorage(idx);
 %                                 mapDataLoss(idx_pixel) = modelLoss(idx);

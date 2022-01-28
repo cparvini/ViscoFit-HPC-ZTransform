@@ -253,6 +253,11 @@ for i_dir = 1:length(Folders)
         
         zTransformAnalysis = processMapZ_func(viscoZ,extractionSettings);
         zTransformAnalysis.mapSize = mode(cat(1,mapSize{:}),1);
+        zTransformAnalysis.windowsize = extractionSettings.windowsize;
+        zTransformAnalysis.smoothOpt = extractionSettings.smoothOpt;
+        zTransformAnalysis.correctTilt = classSettings.correctTilt;
+        zTransformAnalysis.hideSubstrate = extractionSettings.hideSubstrate;
+        zTransformAnalysis.thinSample = classSettings.thinSample;
         save([path filesep savePrepend fileID{mapidx} '_MapResults_zTransform.mat'],'zTransformAnalysis','-v7.3')
         clearvars zTransformAnalysis
         

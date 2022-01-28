@@ -59,6 +59,8 @@ relaxanceMap = cell(size(fitClass.forces_cell));
 retardanceMap = cell(size(fitClass.forces_cell));
 alphaMap = cell(size(fitClass.forces_cell));
 frequencyMap = cell(size(fitClass.forces_cell));
+forceMap = cell(size(fitClass.forces_cell));
+indMap = cell(size(fitClass.forces_cell));
 
 % Create placeholders for the data we will obtain from our
 % optimization attempts. These need to be pre-allocated to
@@ -67,6 +69,8 @@ fitStruct.relaxanceMap = relaxanceMap;
 fitStruct.retardanceMap = retardanceMap;
 fitStruct.alphaMap = alphaMap;
 fitStruct.frequencyMap = frequencyMap;
+fitStruct.forceMap = forceMap;
+fitStruct.indMap = indMap;
 
 % Additional Pre-allocating step to try and avoid growing arrays
 % internally and preventin broadcasting of big variables to the main loop.
@@ -168,13 +172,15 @@ parfor j = 1:n_pixels
     end
     
     % Get Z-Transform Data from Curve
-    [Q_hz,~,~,~,~,f_hz,alphaInit] = zTransformCurve(dataIn{j},smoothOpt,windowsize,thinPixelLoop);
+    [Q_hz,~,F_hz,~,h_hz,f_hz,alphaInit] = zTransformCurve(dataIn{j},smoothOpt,windowsize,thinPixelLoop);
     
     U_hz = 1./(Q_hz);
     relaxanceMap(j) = {Q_hz};
     retardanceMap(j) = {U_hz};
     alphaMap(j) = {alphaInit};
-    frequencyMap(j) = {f_hz};  
+    frequencyMap(j) = {f_hz};
+    forceMap(j) = {F_hz};
+    indMap(j) = {h_hz};
 
 end
 
@@ -182,6 +188,8 @@ fitStruct.relaxanceMap = relaxanceMap;
 fitStruct.retardanceMap = retardanceMap;
 fitStruct.alphaMap = alphaMap;
 fitStruct.frequencyMap = frequencyMap;
+fitStruct.forceMap = forceMap;
+fitStruct.indMap = indMap;
 
 % Create output and clean up the temporary file
 fitStructOut = load(fitStruct.Properties.Source,'-mat');
