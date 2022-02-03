@@ -488,6 +488,7 @@ elseif(strcmpi(extension,valid_extensions{2}))
     [~,index] = sortrows({FC_Data.Channel_name}.'); FC_Data = FC_Data(index); clear index
     z=1;
     InfoDir_Segments=dir([newTempdir sprintf('%s%s%s%s',filesep,FileName,filesep,'segments')]);
+    folderToEval = [];
     for i=1:size(InfoDir_Segments,1)
         if(~isnan(str2double(InfoDir_Segments(i).name)))
             folderToEval(1,z)=i;
@@ -685,6 +686,7 @@ elseif(strcmpi(extension,valid_extensions{4}))
         [~,index] = sortrows({FC_Data.Channel_name}.'); FC_Data = FC_Data(index); clear index
         z=1;
         InfoDir_Segments=dir([newTempdir sprintf('%s%s%sindex%s%d%s%s',filesep,FileName,filesep,filesep,i_pix-1,filesep,'segments')]);
+        folderToEval = [];
         for i=1:size(InfoDir_Segments,1)
             if(~isnan(str2double(InfoDir_Segments(i).name)))
                 folderToEval(1,z)=i;
@@ -708,9 +710,13 @@ elseif(strcmpi(extension,valid_extensions{4}))
             end
             for j=1:size(header_metadata_split,1)
                 temp=header_metadata_split(j,:);
+                try
                 if(strcmp(temp{1},'force-segment-header-info'))&&(strcmp(temp{2},InfoDir_Segments(folderToEval(1,i)).name))&&(strcmp(temp{4},'style'))
                     Data_Type=temp{1,5};
                     break
+                end
+                catch
+                   disp('pause'); 
                 end
             end
             
@@ -780,7 +786,11 @@ elseif(strcmpi(extension,valid_extensions{4}))
         FC_Data_out(2).Channel_name = 'd';
         idx = find(strcmpi({FC_Data.Channel_name},'vDeflection'));
         FC_Data_out(2).extend = FC_Data(idx).extend.Data_distance;
-        FC_Data_out(2).retract = FC_Data(idx).retract.Data_distance;
+        try
+            FC_Data_out(2).retract = FC_Data(idx).retract.Data_distance;
+        catch
+            FC_Data_out(2).retract = NaN(size(FC_Data_out(1).retract));
+        end
         
         if length(FC_Data_out(2).extend) < length(FC_Data_out(1).extend)
             FC_Data_out(1).extend = FC_Data_out(1).extend(1:numel(FC_Data_out(2).extend));
@@ -792,7 +802,11 @@ elseif(strcmpi(extension,valid_extensions{4}))
         
         FC_Data_out(3).Channel_name = 'F'; 
         FC_Data_out(3).extend = FC_Data(idx).extend.Data_force;
-        FC_Data_out(3).retract = FC_Data(idx).retract.Data_force;
+        try
+            FC_Data_out(3).retract = FC_Data(idx).retract.Data_force;
+        catch
+            FC_Data_out(3).retract = NaN(size(FC_Data_out(1).retract));
+        end
         
         FC_Data_out(4).Channel_name = 't';
         header_location2=fullfile(InfoDir(1).folder,'header.properties');

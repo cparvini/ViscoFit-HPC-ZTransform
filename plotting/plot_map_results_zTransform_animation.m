@@ -14,24 +14,30 @@ while stillRunning
     zeroSubstrate = true; % In addition to correcting for tilt, also set the new, flat surface to have a minimum value starting at zero.
     fillPixels = true;
     plotIndentation = true;
-    figX = 10;
-    figY = 10;
+    logSteps = true;
+    figX = 0;
+    figY = 50;
     nTicks = 5;
     plotModel = false;
-    maxCol = 2;
+    maxCol = 5;
     n_plots = 4+plotModel+plotIndentation;
     n_rows = ceil(n_plots/maxCol);
     n_cols = min([n_plots maxCol]);
-    figWid = 375*n_cols;
-    figHeight = 375*n_rows;
+    maxwid = get(0,'screensize');
+    maxwid = maxwid(3);
+    mult = min([400 maxwid/n_cols]);
+    figWid = mult*n_cols;
+    figHeight = max([mult*n_rows figWid/n_plots]);
     mapColorName = 'turbo';
     climMax = 2e5; % Pa
     climHeight = 15e-6; % meters
-    climInd = 2e-6; % meters
+    climInd = 500e-9; % meters
     stiffMax = 10*climMax; % Pa
     trimHeight = 50e-9;
     dFreq = 200; % Hz, step size between frames
+    n_frames = 150; % frames, number of frames per order of magnitude
     n_datapoints = 10;
+    fps = 15;
     
     if plotModel
         mapType = '-Model';
@@ -155,11 +161,25 @@ while stillRunning
                 % Count orders of 10
                 temp = minFreq;
                 tempf = minFreq;
+                tempmax = 10^ceil(log10(minFreq));
                 magList = [];
-                while temp < maxFreq
-                    tempf = 10.^( ( log10(temp) ) );
-                    magList = horzcat(magList,tempf);
-                    temp = temp + dFreq;
+                if ~logSteps
+                    while temp < maxFreq
+                        tempf = 10.^( ( log10(temp) ) );
+                        magList = horzcat(magList,tempf);
+                        temp = temp + dFreq;
+                    end
+                else
+                    while temp < maxFreq
+                        if temp >= tempmax
+                            tempmax = temp*10;
+                            dFreq = round((tempmax-(tempmax/10))/n_frames);
+                        end
+                        
+                        tempf = 10.^( ( log10(temp) ) );
+                        magList = horzcat(magList,tempf);
+                        temp = temp + dFreq;
+                    end
                 end
                 magList = unique(magList);
                 
@@ -174,18 +194,25 @@ while stillRunning
 
                 % Prep the movie
                 u = uicontrol(mapPlotWindow,'Style','slider');
-                u.Position = [20 30 figWid-230 20];
+                u.Position = [20 15 figWid-230 20];
                 u.Max = max(freqList);
                 u.Min = min(freqList);
                 u.Value = freqList(1);
                 u2 = uicontrol(mapPlotWindow,'Style','edit');
-                u2.Position = [figWid-175 20 150 40];
+                u2.Position = [figWid-175 10 150 40];
                 u2.String = [num2str(round(freqList(1))) ' Hz'];
                 u2.FontSize = 16;
                 drawnow
                 
                 gifFile = [path filesep fileLabels{j_dir} '-MapAnimation-' varNames{j}...
                     mapType '.gif'];
+                movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
+                    mapType '.mp4'];
+                
+                v = VideoWriter(movieFile,'MPEG-4');
+                v.FrameRate = fps;
+                v.Quality = 100;
+                open(v);
                 
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 pixelHeightArray = cell2mat(fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate));
@@ -225,29 +252,42 @@ while stillRunning
                         idx_pixel = sub2ind(mapSize,mapSize(2)-yc,xc);
                         
                         heightImg(idx_pixel) = pixelHeightArray(idx_pixel);
-                        dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
-                            resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
-                            resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
-                            resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
-                            resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
-                            resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
-                            resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
-                            resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
-                            resultsStruct.(varNames{j}).ViscoClass.thinSample,...
-                            resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
-                        [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
-                        F_hz = abs(F_hz);
-                        h_hz = abs(h_hz);
                         
-%                         if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
-%                             xc = xc + 1;
-%                             continue;
-%                         end
+                        if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                            xc = xc + 1;
+                            continue;
+                        end
 
                         if hideSubstrate && any(ismember(k_pixels,pixelSkip))
                             xc = xc + 1;
                             continue;
                         end
+                        
+                        if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                            dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
+                                resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
+                                resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
+                                resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
+                                resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
+                                resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
+                                resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                                resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                                resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                                resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
+
+                            [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
+                            F_hz = abs(F_hz);
+                            h_hz = abs(h_hz);
+                        else
+                            F_hz = abs(resultsStruct.(varNames{j}).forceMap{k_pixels});
+                            h_hz = abs(resultsStruct.(varNames{j}).indMap{k_pixels});
+                        end
+                        
+                        % Load and perform peak correction
+                        freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                        [~,maxid] = max(F_hz);
+                        freqAdj = freq(maxid);
+                        freq = freq - freqAdj;
                         
                         if plotModel
                             
@@ -262,7 +302,6 @@ while stillRunning
                             fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
 
                             % Generate a frequency array in log scale
-                            freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                             omega = 2.*pi.*freq;
                             
                             % Find the best number of terms for this pixel
@@ -404,8 +443,14 @@ while stillRunning
                                     NaN);
                                 mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
                                     NaN);
-                                mapDataInd(idx_pixel) = interp1(freq,h_hz,freqList(k_freq),'makima',...
-                                    NaN);
+                                
+                                % Has to be from the time domain
+                                % (normalization issues)
+                                evalPt = 1./(freqList(k_freq));
+                                t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
+                                h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
+                                mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
+                                    1e-12);
                                                                 
 %                                 mapDataStorage(idx_pixel) = modelStorage(idx);
 %                                 mapDataLoss(idx_pixel) = modelLoss(idx);
@@ -422,7 +467,6 @@ while stillRunning
                             
                             % We are just plotting the data captured
                             % DIRECTLY from the z-transform method.
-                            freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                             modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                             modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                             modelAngle = atand(modelLoss./modelStorage);
@@ -466,8 +510,14 @@ while stillRunning
                                     NaN);
                                 mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
                                     NaN);
-                                mapDataInd(idx_pixel) = interp1(freq(ids),h_hz(ids),freqList(k_freq),'makima',...
-                                    NaN);
+                                
+                                % Has to be from the time domain
+                                % (normalization issues)
+                                evalPt = 1./(freqList(k_freq));
+                                t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
+                                h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
+                                mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
+                                    1e-12);
                                 
 %                                 mapDataStorage(idx_pixel) = modelStorage(idx);
 %                                 mapDataLoss(idx_pixel) = modelLoss(idx);
@@ -631,6 +681,7 @@ while stillRunning
                        cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
                     end
                     view(2)
+                    pbaspect([1 1 1])
                     hold off
                     
                     if plotIndentation
@@ -653,6 +704,7 @@ while stillRunning
                            cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
                         end
                         view(2)
+                        pbaspect([1 1 1])
                         hold off
                         
                     end
@@ -676,6 +728,7 @@ while stillRunning
                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
                     end
                     view(2)
+                    pbaspect([1 1 1])
                     hold off
 
                     ax = nexttile;
@@ -696,6 +749,7 @@ while stillRunning
                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
                     end
                     view(2)
+                    pbaspect([1 1 1])
                     hold off
                     
                     ax = nexttile;
@@ -713,6 +767,7 @@ while stillRunning
                     cb.Ruler.TickLabelFormat='%g Deg';
                     caxis([0 90]);
                     view(2)
+                    pbaspect([1 1 1])
                     hold off
 
                     if plotModel
@@ -729,6 +784,7 @@ while stillRunning
                         cb = colorbar;
                         set(cb,'YTick',1:numel(resultsStruct.(varNames{j}).bestParams))
                         view(2)
+                        pbaspect([1 1 1])
                         hold off
                     end
                     
@@ -747,7 +803,13 @@ while stillRunning
                         imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'WriteMode','append');
                     end
                     
+                    % Write to mp4
+                    writeVideo(v,frame);
+                    
                 end
+                
+                % End mp4
+                close(v);
                 
 %                 % Display Movie
 %                 playMov = true;
@@ -765,7 +827,7 @@ while stillRunning
         end
         
     end
-
+    
     % Prompt user
     answer = questdlg('Would you like to analyze another directory?', ...
         'Options', ...

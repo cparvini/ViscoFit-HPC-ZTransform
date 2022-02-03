@@ -186,7 +186,7 @@ while stillRunning
                 yc = 0;
                 pixelLog = NaN(numel(mapDataHeight),2);
                 
-                kmeansData = NaN(numel(mapDataHeight),numel(magList));
+                clusteringData = NaN(numel(mapDataHeight),numel(magList));
 
                 for k_pixels = 1:numel(mapDataHeight)
 
@@ -199,28 +199,40 @@ while stillRunning
                     pixelLog(k_pixels,:) = [mapSize(2)-yc,xc];
 
                     heightImg(idx_pixel) = pixelHeightArray(idx_pixel);
-                    dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
-                        resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
-                        resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
-                        resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
-                        resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
-                        resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
-                        resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
-                        resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
-                        resultsStruct.(varNames{j}).ViscoClass.thinSample,...
-                        resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
-                    [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
-                    F_hz = abs(F_hz);
-                    h_hz = abs(h_hz);
-
+                    
                     if hideSubstrate && any(ismember(k_pixels,pixelSkip))
                         xc = xc + 1;
                         continue;
                     end
+                    
+                    if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                        dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                            resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                            resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                            resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
+
+                        [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
+                        F_hz = abs(F_hz);
+                        h_hz = abs(h_hz);
+                    else
+                        F_hz = abs(resultsStruct.(varNames{j}).forceMap{k_pixels});
+                        h_hz = abs(resultsStruct.(varNames{j}).indMap{k_pixels});
+                    end
+                    
+                    % Load and perform peak correction
+                    freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    [~,maxid] = max(F_hz);
+                    freqAdj = freq(maxid);
+                    freq = freq - freqAdj;
 
                     % We are just plotting the data captured
                     % DIRECTLY from the z-transform method.
-                    freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                     modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                     modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                     modelAngle = atand(modelLoss./modelStorage);
@@ -260,7 +272,7 @@ while stillRunning
                         % Resample to known array of frequencies
                         obsOut = interp1(freq,kmeansInterp,magList,'makima',...
                             NaN);
-                        kmeansData(k_pixels,:) = obsOut;
+                        clusteringData(k_pixels,:) = obsOut;
                     catch
                         % Do nothing
                     end
@@ -270,15 +282,21 @@ while stillRunning
 
                 end
 
-                opts = statset('UseParallel',1);
-                
-                tempfunc = @(x,k) kmeans(x,k,'Options',opts,'MaxIter',10000,...
-                        'Display','final','Replicates',n_reps);
+%                 opts = statset('UseParallel',1);
+%                 tempfunc = @(x,k) kmeans(x,k,'Options',opts,'MaxIter',10000,...
+%                         'Display','final','Replicates',n_reps);
+                    
+                opts = statset('UseParallel',1,...
+                    'MaxIter',10000,...
+                    'Display','final');
+                tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
+                    'Distance',@dtwf,...
+                    'Replicates',n_reps);
                 
                 % Try all of the kmeans configurations
-                eva = evalclusters(kmeansData,tempfunc,'CalinskiHarabasz',...
+                eva = evalclusters(clusteringData,tempfunc,'CalinskiHarabasz',...
                     'klist',(1:maxK));
-                idxK = tempfunc(kmeansData,eva.OptimalK);
+                idxK = tempfunc(clusteringData,eva.OptimalK);
                 
                 for k_pixels = 1:numel(mapDataHeight)
                     mapDataKMeans(pixelLog(k_pixels,1),pixelLog(k_pixels,2)) = idxK(k_pixels);
