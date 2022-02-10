@@ -35,7 +35,7 @@ while stillRunning
     stiffMax = 10*climMax; % Pa
     trimHeight = 50e-9;
     dFreq = 200; % Hz, step size between frames
-    n_frames = 150; % frames, number of frames per order of magnitude
+    n_frames = 100; % frames, number of frames per order of magnitude
     n_datapoints = 10;
     fps = 15;
     
@@ -67,19 +67,6 @@ while stillRunning
         Folders = cellfun(@(root,sub)[root filesep sub],{subFolders.folder},{subFolders.name},'UniformOutput',false);
     else
         Folders = {originalPath};
-    end
-
-    % Clear old figures if they exist
-    if ~exist('mapPlotWindow','var')
-        mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-    else
-        try
-            figure(mapPlotWindow)
-            clf
-        catch
-            clearvars mapPlotWindow
-            mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-        end
     end
 
     % Make a list of unique colors for the test conditions
@@ -171,9 +158,13 @@ while stillRunning
                     end
                 else
                     while temp < maxFreq
+                        if temp == minFreq
+                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_frames);
+                        end
+                        
                         if temp >= tempmax
                             tempmax = temp*10;
-                            dFreq = round((tempmax-(tempmax/10))/n_frames);
+                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_frames);
                         end
                         
                         tempf = 10.^( ( log10(temp) ) );
@@ -191,29 +182,15 @@ while stillRunning
 %                 end
 %                 freqList = flip(unique(freqList)); % Process from high to low freq
                 freqList = flip(magList);
-
-                % Prep the movie
-                u = uicontrol(mapPlotWindow,'Style','slider');
-                u.Position = [20 15 figWid-230 20];
-                u.Max = max(freqList);
-                u.Min = min(freqList);
-                u.Value = freqList(1);
-                u2 = uicontrol(mapPlotWindow,'Style','edit');
-                u2.Position = [figWid-175 10 150 40];
-                u2.String = [num2str(round(freqList(1))) ' Hz'];
-                u2.FontSize = 16;
-                drawnow
+                
+                M = struct('cdata', cell(1,numel(freqList)), ...
+                    'colormap', cell(1,numel(freqList)));
                 
                 gifFile = [path filesep fileLabels{j_dir} '-MapAnimation-' varNames{j}...
                     mapType '.gif'];
                 movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
                     mapType '.mp4'];
-                
-                v = VideoWriter(movieFile,'MPEG-4');
-                v.FrameRate = fps;
-                v.Quality = 100;
-                open(v);
-                
+                                
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 pixelHeightArray = cell2mat(fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate));
 
@@ -224,24 +201,88 @@ while stillRunning
 
                 pixelSkip = 1:numel(pixelHeightArray);
                 pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
-                
-                heightImg = zeros(mapSize);
+
+%                 progressString = sprintf('Creating Movie Frames...');
+%                 hbar = parfor_progressbar(numel(freqList),progressString);
+%                 warning('off');
                 
                 for k_freq = 1:numel(freqList)
-
+                    
+                    % Prep the movie
+                    % Clear old figures if they exist
+                    if ~exist('mapPlotWindow','var')
+                        mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+                    else
+                        try
+                            figure(mapPlotWindow)
+                            clf
+                        catch
+                            mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+                        end
+                    end
+                    u = uicontrol(mapPlotWindow,'Style','slider');
+                    u.Position = [20 15 figWid-230 20];
+                    u.Max = max(freqList);
+                    u.Min = min(freqList);
+                    u.Value = freqList(1);
+                    u2 = uicontrol(mapPlotWindow,'Style','edit');
+                    u2.Position = [figWid-175 10 150 40];
+                    u2.String = [num2str(round(freqList(1))) ' Hz'];
+                    u2.FontSize = 16;
+                    
                     % Make blank map data
                     mapDataStorage = NaN(mapSize);
                     mapDataLoss = NaN(mapSize);
                     mapDataAngle = NaN(mapSize);
+                    mapDataRelaxance = NaN(mapSize);
                     mapDataError = NaN(mapSize);
                     mapDataTerms = NaN(mapSize);
                     mapDataHeight = NaN(mapSize);
                     mapDataInd = NaN(mapSize);
+                    heightImg = zeros(mapSize);
 
                     % Position for the map
                     xc = 1;
                     yc = 0;
-
+                                        
+                    if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                        % Do some prep to shorten the computation time and
+                        % limit the number of calls to "zTransformCurve",
+                        % which is slow.
+                        F_hz_all = cell(size([pixelHeight_cell{:}]));
+                        h_hz_all = cell(size([pixelHeight_cell{:}]));
+                        
+                        for i_z = 1:numel(F_hz_all)
+                            
+                            if hideSubstrate && any(ismember(k_pixels,pixelSkip))
+                                F_hz_all{i_z} = NaN;
+                                h_hz_all{i_z} = NaN;
+                                continue;
+                            end
+                            
+                            dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{i_z},...
+                                resultsStruct.(varNames{j}).ViscoClass.dts_cell{i_z},...
+                                resultsStruct.(varNames{j}).ViscoClass.forces_cell{i_z},...
+                                resultsStruct.(varNames{j}).ViscoClass.indentations_cell{i_z},...
+                                resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{i_z},...
+                                resultsStruct.(varNames{j}).ViscoClass.nu_cell{i_z},...
+                                resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                                resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                                resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                                resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{i_z}};
+                            
+                            if any(cellfun(@isempty,dataIn(1:6))) || any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                                F_hz_all{i_z} = NaN;
+                                h_hz_all{i_z} = NaN;
+                                continue;
+                            end
+                            
+                            [~,~,F_hz_all{i_z},~,h_hz_all{i_z},~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
+                            
+                        end
+                        
+                    end
+                    
                     for k_pixels = 1:numel(mapDataStorage)
                         
                         % Get the current pixel position
@@ -264,20 +305,8 @@ while stillRunning
                         end
                         
                         if ~isfield(resultsStruct.(varNames{j}),'indMap')
-                            dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
-                                resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
-                                resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
-                                resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
-                                resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
-                                resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
-                                resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
-                                resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
-                                resultsStruct.(varNames{j}).ViscoClass.thinSample,...
-                                resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
-
-                            [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
-                            F_hz = abs(F_hz);
-                            h_hz = abs(h_hz);
+                            F_hz = abs(F_hz_all{k_pixels});
+                            h_hz = abs(h_hz_all{k_pixels});
                         else
                             F_hz = abs(resultsStruct.(varNames{j}).forceMap{k_pixels});
                             h_hz = abs(resultsStruct.(varNames{j}).indMap{k_pixels});
@@ -659,6 +688,7 @@ while stillRunning
                     mapDataAngle(mapDataAngle == 0) = NaN;
                     mapDataInd(mapDataInd == 0) = NaN;
                     
+                    
                     tiledlayout(n_rows,n_cols, 'padding', 'none', ...
                         'TileSpacing', 'compact', ...
                         'OuterPosition', [0 0.15 1 0.85])
@@ -793,34 +823,33 @@ while stillRunning
                     u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
                     drawnow
                     M(k_freq) = getframe(mapPlotWindow);
-                    frame = M(k_freq);
+                    
+%                     hbar.iterate(1); % Increase progressbar by 1 iteration
+                    
+                end
+                
+%                 close(hbar)
+%                 warning('on');
+                
+                % Make gif
+                for i_mov = 1:numel(M)
+                    frame = M(i_mov);
                     im = frame2im(frame);
                     [imind,cm] = rgb2ind(im,256);
-
-                    if k_freq == 1
+                    if i_mov == 1
                         imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'Loopcount',inf);
                     else
                         imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'WriteMode','append');
                     end
-                    
-                    % Write to mp4
-                    writeVideo(v,frame);
-                    
                 end
                 
-                % End mp4
+                % Write to mp4
+                v = VideoWriter(movieFile,'MPEG-4');
+                v.FrameRate = fps;
+                v.Quality = 100;
+                open(v);
+                writeVideo(v,M);
                 close(v);
-                
-%                 % Display Movie
-%                 playMov = true;
-%                 qst = "Would you like to play the movie again?";
-%                 while playMov
-%                     movie(M);
-%                     resp = questdlg(qst,"Replay Request",'Yes','No','No');
-%                     if strcmp(resp,'No')
-%                         playMov = false;
-%                     end
-%                 end
 
             end
             
