@@ -58,7 +58,7 @@ maxwid = maxwid(3);
 mapColorName = 'turbo';
 climMax = 2e5; % Pa
 climHeight = 15e-6; % meters
-climInd = 500e-9; % meters
+climInd = 1000e-9; % meters
 stiffMax = 10*climMax; % Pa
 trimHeight = 100e-9;
 dFreq = 200; % Hz, step size between frames
@@ -100,7 +100,7 @@ for i_dir = 1:length(Folders)
         fileLabels{j} = strjoin(temp([1 idx-1]),'-');
     end
     
-    try
+%     try
 
         for j_dir = 1:length(Files)
             resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
@@ -246,15 +246,15 @@ for i_dir = 1:length(Folders)
                     u2.FontSize = 16;
 
                     % Make blank map data
-                    mapDataStorage = NaN(mapSize);
-                    mapDataLoss = NaN(mapSize);
-                    mapDataAngle = NaN(mapSize);
-                    mapDataRelaxance = NaN(mapSize);
-                    mapDataError = NaN(mapSize);
-                    mapDataTerms = NaN(mapSize);
-                    mapDataHeight = NaN(mapSize);
-                    mapDataInd = NaN(mapSize);
-                    heightImg = zeros(mapSize);
+                    mapDataStorage = NaN(flip(mapSize));
+                    mapDataLoss = NaN(flip(mapSize));
+                    mapDataAngle = NaN(flip(mapSize));
+                    mapDataRelaxance = NaN(flip(mapSize));
+                    mapDataError = NaN(flip(mapSize));
+                    mapDataTerms = NaN(flip(mapSize));
+                    mapDataHeight = NaN(flip(mapSize));
+                    mapDataInd = NaN(flip(mapSize));
+                    heightImg = zeros(flip(mapSize));
 
                     % Position for the map
                     xc = 1;
@@ -297,6 +297,8 @@ for i_dir = 1:length(Folders)
                         end
 
                     end
+                    
+                    heightImg = reshape(pixelHeightArray,mapSize);
 
                     for k_pixels = 1:numel(mapDataStorage)
 
@@ -305,9 +307,7 @@ for i_dir = 1:length(Folders)
                             xc = 1;
                             yc = yc + 1;
                         end
-                        idx_pixel = sub2ind(mapSize,mapSize(2)-yc,xc);
-
-                        heightImg(idx_pixel) = pixelHeightArray(idx_pixel);
+                        idx_pixel = sub2ind(flip(mapSize),mapSize(2)-yc,xc);
 
                         if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
                             xc = xc + 1;
@@ -633,8 +633,8 @@ for i_dir = 1:length(Folders)
                     title('Topography')
                     ylabel('Y Index')
                     xlabel('X Index')
-                    xlim([1 mapSize(1)])
-                    ylim([1 mapSize(2)])
+                    xlim([1 max(mapSize)])
+                    ylim([1 max(mapSize)])
                     cb = colorbar;
                     caxis([0 climHeight]); % Absolute scale
                     temp = (cb.Ticks' ./ 1e-6);
@@ -655,8 +655,8 @@ for i_dir = 1:length(Folders)
                         title('Indentation')
                         ylabel('Y Index')
                         xlabel('X Index')
-                        xlim([1 mapSize(1)])
-                        ylim([1 mapSize(2)])
+                        xlim([1 max(mapSize)])
+                        ylim([1 max(mapSize)])
                         cb = colorbar;
                         caxis([0 climInd]); % Absolute scale
                         temp = (cb.Ticks' ./ 1e-9);
@@ -677,8 +677,8 @@ for i_dir = 1:length(Folders)
                     title('Storage Modulus')
                     ylabel('Y Index')
                     xlabel('X Index')
-                    xlim([1 mapSize(1)])
-                    ylim([1 mapSize(2)])
+                    xlim([1 max(mapSize)])
+                    ylim([1 max(mapSize)])
                     cb = colorbar;
                     caxis([0 climMax]);
                     temp = (cb.Ticks' .* 1e-3);
@@ -696,8 +696,8 @@ for i_dir = 1:length(Folders)
                     hold on
                     title('Loss Modulus')
                     xlabel('X Index')
-                    xlim([1 mapSize(1)])
-                    ylim([1 mapSize(2)])
+                    xlim([1 max(mapSize)])
+                    ylim([1 max(mapSize)])
                     cb = colorbar;
                     caxis([0 climMax]);
                     temp = (cb.Ticks' .* 1e-3);
@@ -715,8 +715,8 @@ for i_dir = 1:length(Folders)
                     hold on
                     title('Loss Angle')
                     xlabel('X Index')
-                    xlim([1 mapSize(1)])
-                    ylim([1 mapSize(2)])
+                    xlim([1 max(mapSize)])
+                    ylim([1 max(mapSize)])
                     cb = colorbar;
                     cb.Ruler.TickLabelFormat='%g Deg';
                     caxis([0 90]);
@@ -731,8 +731,8 @@ for i_dir = 1:length(Folders)
                         colormap(ax,mapColorName)
                         colormap(gca,'parula')
                         hold on
-                        xlim([1 mapSize(1)])
-                        ylim([1 mapSize(2)])
+                        xlim([1 max(mapSize)])
+                        ylim([1 max(mapSize)])
                         title(sprintf('Number of Terms'))
                         xlabel('X Index')
                         cb = colorbar;
@@ -774,14 +774,14 @@ for i_dir = 1:length(Folders)
 
         end
         
-    catch ERROR
-        
-        fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
-        fprintf('The identifier was:\n%s',ERROR.identifier);
-        fprintf('Message:%s\n',ERROR.message);
-        fprintf('Skipping to next directory...\n');
-        
-    end
+%     catch ERROR
+%         
+%         fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
+%         fprintf('The identifier was:\n%s',ERROR.identifier);
+%         fprintf('Message:%s\n',ERROR.message);
+%         fprintf('Skipping to next directory...\n');
+%         
+%     end
 
 end
     

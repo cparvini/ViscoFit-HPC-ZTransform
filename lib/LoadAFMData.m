@@ -440,6 +440,20 @@ for k = 1:length(Files)
                 if indShift == 1
                     indShift = 0;
                 end
+                
+                % Verify map size
+                overrideSize = false;
+                idx = find(contains({fileStruct{1+indShift}(:).Channel_name},'mapsize'),1);
+                if prod(fileStruct{1+indShift}(idx).extend) > numPixels
+                    longAx = max(fileStruct{1+indShift}(idx).extend);
+                    trueMapSize = [longAx floor(numPixels/longAx)];
+                    overrideSize = true;
+                    
+                    % Now, remove the rows which are beyond what we care to
+                    % include
+                    fileStruct((prod(trueMapSize)+1):end) = [];
+                    numPixels = length(fileStruct);
+                end
 
                 for i_pix = (1:numPixels)
                     % Store MapID
@@ -478,10 +492,14 @@ for k = 1:length(Files)
                     idx = find(contains({fileStruct{i_pix}(:).Channel_name},'pixel'),1);
                     point_number(i_pix+indShift) = str2double(fileStruct{i_pix}(idx).extend);     % Position Number
                     run_number(i_pix+indShift) = 1;     % Run Number
-
+                    
                     idx = find(contains({fileStruct{i_pix}(:).Channel_name},'mapsize'),1);
-                    dataStruct(i_pix+indShift).mapSize = fileStruct{i_pix}(idx).extend;
-
+                    if overrideSize
+                        dataStruct(i_pix+indShift).mapSize = trueMapSize;
+                    else
+                        dataStruct(i_pix+indShift).mapSize = fileStruct{i_pix}(idx).extend;
+                    end
+                    
                     idx = find(contains({fileStruct{i_pix}(:).Channel_name},'stiffness'),1);
                     k_cantilever(i_pix+indShift) = fileStruct{i_pix}(idx).extend;
 
