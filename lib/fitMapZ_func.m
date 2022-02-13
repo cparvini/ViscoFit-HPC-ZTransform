@@ -25,12 +25,6 @@ function fitStructOut = fitMapZ_func(fitClass,varargin)
 
 % Initialize Output Structure
 tempFile = fullfile(tempdir,'fitStructTemp.mat');
-try
-    delete tempFile
-    fprintf('\nDeleted Old Temporary File.\n');
-catch
-    fprintf('\nNo Old Temporary File Exists. Creating a new one.\n');
-end
 fitStruct = matfile(tempFile,'Writable',true);
 
 % Default Settings

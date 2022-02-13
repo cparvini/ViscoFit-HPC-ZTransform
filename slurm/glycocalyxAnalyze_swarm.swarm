@@ -1,32 +1,41 @@
-# Glycocalyx Analyze Swarm (No Fitting)
+# Glycocalyx Analyze and Animate Swarm (No Fitting)
 # Swarm command:
 # swarm -t 56 -g 32 -f glycocalyxAnalyze_swarm.swarm --time 0-10:00:00 --gres=lscratch:50 --job-name GlycoAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
 # To debug first and test what SLURM sees:
 # swarm -t 56 -g 32 --devel -f glycocalyxAnalyze_swarm.swarm --time 0-10:00:00 --gres=lscratch:50 --job-name GlycoAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/aggrecan 100ug/' 'AsPC1Agg100ug' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/aggrecan 100ug/' 'AsPC1Agg100ug' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/aggrecan 100ug/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/aggrecan 100ug/' 'BxPC3Agg100ug' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/aggrecan 100ug/' 'BxPC3Agg100ug' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/aggrecan 100ug/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/aggrecan 100ug/' 'HPDEAgg100ug' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/aggrecan 100ug/' 'HPDEAgg100ug' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/aggrecan 100ug/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/buffer/' 'AsPC1buffer' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/buffer/' 'AsPC1buffer' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/buffer/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/buffer/' 'BxPC3buffer' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/buffer/' 'BxPC3buffer' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/buffer/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/buffer/' 'HPDEbuffer' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/buffer/' 'HPDEbuffer' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/buffer/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/hyaluronidase bt 100ug/' 'AsPC1hbt100ug' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/hyaluronidase bt 100ug/' 'AsPC1hbt100ug' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/AsPC1/hyaluronidase bt 100ug/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/hyaluronidase bt 100ug/' 'BxPC3hbt100ug' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/hyaluronidase bt 100ug/' 'BxPC3hbt100ug' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/BxPC3/hyaluronidase bt 100ug/' 1 1 1 1 1 1
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
   tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
-  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/hyaluronidase bt 100ug/' 'HPDEhbt100ug' 28
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/hyaluronidase bt 100ug/' 'HPDEhbt100ug' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/HPDE/hyaluronidase bt 100ug/' 1 1 1 1 1 1

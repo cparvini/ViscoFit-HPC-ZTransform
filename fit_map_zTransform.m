@@ -269,6 +269,12 @@ for i_dir = 1:length(Folders)
         fitSettings.windowsize = 0.10;                      % (ratio) Fraction of dataset length to use for window size for smoothing methods
         
         maxwellFit_zTransform = fitMapZ_func(viscoZ,fitSettings);
+        
+        % In case the class was unsuccessfully saved in fitMapZ_func
+        if isempty(maxwellFit_zTransform.ViscoClass)
+            maxwellFit_zTransform.ViscoClass = viscoZ;
+        end
+        
         maxwellFit_zTransform.mapSize = mode(cat(1,mapSize{:}),1);
         save([path filesep savePrepend fileID{mapidx} '_FitResults_NelderMead_zTransform.mat'],'maxwellFit_zTransform','-v7.3')
         clearvars maxwellFit_zTransform

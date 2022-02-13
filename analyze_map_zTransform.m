@@ -252,8 +252,16 @@ for i_dir = 1:length(Folders)
                                                                         % Options: none, g-time, ma-time, g-hz, ma-hz
                                                                         % *-time smooths before z-transform. *-hz will
                                                                         % smooth after z-transforming F and h.
-
+            
             zTransformAnalysis = processMapZ_func(viscoZ,extractionSettings);
+            
+            % In case the class was unsuccessfully saved in
+            % processMapZ_func
+            if isempty(zTransformAnalysis.ViscoClass)
+                fprintf('\n\nprocessMapZ_func resulted in an empty ViscoClass!\n\n');
+                zTransformAnalysis.ViscoClass = viscoZ;
+            end
+            
             zTransformAnalysis.mapSize = mode(cat(1,mapSize{:}),1);
             zTransformAnalysis.windowsize = extractionSettings.windowsize;
             zTransformAnalysis.smoothOpt = extractionSettings.smoothOpt;

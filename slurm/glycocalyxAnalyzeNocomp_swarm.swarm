@@ -1,0 +1,23 @@
+# Glycocalyx Analyze and Animate Swarm (No Fitting, No Compiler)
+# Swarm command:
+# swarm -t 56 -g 32 -f glycocalyxAnalyzeNocomp_swarm.swarm --module=matlab --time 0-6:00:00 --gres=lscratch:50 --job-name GlycoAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+# To debug first and test what SLURM sees:
+# swarm -t 56 -g 32 --devel -f glycocalyxAnalyzeNocomp_swarm.swarm --module=matlab --time 0-6:00:00 --gres=lscratch:50 --job-name GlycoAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/AsPC1/aggrecan 100ug/'; analyze_map_zTransform(startDir,'AsPC1Agg100ug',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/BxPC3/aggrecan 100ug/'; analyze_map_zTransform(startDir,'BxPC3Agg100ug',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/HPDE/aggrecan 100ug/'; analyze_map_zTransform(startDir,'HPDEAgg100ug',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/AsPC1/buffer/'; analyze_map_zTransform(startDir,'AsPC1buffer',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/BxPC3/buffer/'; analyze_map_zTransform(startDir,'BxPC3buffer',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/HPDE/buffer/'; analyze_map_zTransform(startDir,'HPDEbuffer',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/AsPC1/hyaluronidase bt 100ug/'; analyze_map_zTransform(startDir,'AsPC1hbt100ug',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/BxPC3/hyaluronidase bt 100ug/'; analyze_map_zTransform(startDir,'BxPC3hbt100ug',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/HPDE/hyaluronidase bt 100ug/'; analyze_map_zTransform(startDir,'HPDEhbt100ug',28); makeZAnimation(startDir,1,1,1,1,1,1); exit;"

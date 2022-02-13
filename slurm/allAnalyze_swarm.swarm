@@ -1,0 +1,41 @@
+# Analyze and Animate Melanoma/Fibroblasts/Melanocytes Swarm (No Fitting)
+# Swarm command:
+# swarm -t 56 -g 32 -f allAnalyze_swarm.swarm --time 0-12:00:00 --gres=lscratch:50 --job-name allAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+# To debug first and test what SLURM sees:
+# swarm -t 56 -g 32 --devel -f allAnalyze_swarm.swarm --time 0-12:00:00 --gres=lscratch:50 --job-name allAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/18-June-2021/' 'A375PTest' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/18-June-2021/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/24-June-2021/Dish1/' 'A375PDish1' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/24-June-2021/Dish1/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/24-June-2021/Dish2/' 'A375PDish2' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/24-June-2021/Dish2/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/24-June-2021/Dish3/' 'A375PDish3' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375P/24-June-2021/Dish3/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M1/8-July-2021/Dish1/' 'A375M1Dish1' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M1/8-July-2021/Dish1/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M1/8-July-2021/Dish2/' 'A375M1Dish2' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M1/8-July-2021/Dish2/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M2/11-August-2021/Dish1/' 'A375M2Dish1' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M2/11-August-2021/Dish1/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M2/11-August-2021/Dish2/' 'A375M2Dish2' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M2/11-August-2021/Dish2/' 1 1 1 1 1 1
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+  tar -C /lscratch/$SLURM_JOB_ID -xf /usr/local/matlab-compiler/v910.tar.gz \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_analyze_map_zTransform.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M2/11-August-2021/Dish3/' 'A375M2Dish3' 28 \
+  && /home/parvinich/ViscoFit-HPC-ZTransform/Executables/run_makeZAnimation.sh /lscratch/$SLURM_JOB_ID/v910 '/data/parvinich/ViscoFitZ-HPC/A375M2/11-August-2021/Dish3/' 1 1 1 1 1 1

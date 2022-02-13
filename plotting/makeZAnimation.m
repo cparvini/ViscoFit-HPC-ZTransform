@@ -203,8 +203,12 @@ for i_dir = 1:length(Folders)
 
                 gifFile = [path filesep fileLabels{j_dir} '-MapAnimation-' varNames{j}...
                     mapType '.gif'];
+%                 movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
+%                     mapType '.mp4'];
+                
+                % Can't render mp4 on linux cluster
                 movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
-                    mapType '.mp4'];
+                    mapType '.avi'];
 
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 if correctTilt
@@ -235,15 +239,30 @@ for i_dir = 1:length(Folders)
                             mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
                         end
                     end
-                    u = uicontrol(mapPlotWindow,'Style','slider');
-                    u.Position = [20 15 figWid-230 20];
-                    u.Max = max(freqList);
-                    u.Min = min(freqList);
-                    u.Value = freqList(1);
-                    u2 = uicontrol(mapPlotWindow,'Style','edit');
-                    u2.Position = [figWid-175 10 150 40];
-                    u2.String = [num2str(round(freqList(1))) ' Hz'];
-                    u2.FontSize = 16;
+                    
+                    % Original, using uicontrols
+%                     u = uicontrol(mapPlotWindow,'Style','slider');
+%                     u.Position = [20 15 figWid-230 20];
+%                     u.Max = max(freqList);
+%                     u.Min = min(freqList);
+%                     u.Value = freqList(1);
+%                     u2 = uicontrol(mapPlotWindow,'Style','edit');
+%                     u2.Position = [figWid-175 10 150 40];
+%                     u2.String = [num2str(round(freqList(1))) ' Hz'];
+%                     u2.FontSize = 16;
+                    
+                    % Method 2, using annotation
+                    pos = [figWid-245 10 175 45];
+                    str = [num2str(round(freqList(k_freq))) ' Hz'];
+                    annotation('textbox',...
+                        'Units','pixels',...
+                        'Position',pos,...
+                        'String',str,...
+                        'FitBoxToText','on',...
+                        'BackgroundColor','white',...
+                        'HorizontalAlignment','center',...
+                        'VerticalAlignment','middle',...
+                        'FontSize',20);
 
                     % Make blank map data
                     mapDataStorage = NaN(flip(mapSize));
@@ -743,11 +762,17 @@ for i_dir = 1:length(Folders)
                     end
 
                     % Save Animation
-                    u.Value = freqList(k_freq);
-                    u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
+%                     u.Value = freqList(k_freq);
+%                     u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
                     drawnow
-                    M(k_freq) = getframe(mapPlotWindow);
+                    
+                    % method 1 using getframe
+%                     M(k_freq) = getframe(mapPlotWindow);
 
+                    % method 2 using print
+                    cdata = print('-RGBImage','-r120');
+                    M(k_freq) = im2frame(cdata);
+                    
                 end
 
                 % Make gif
@@ -763,7 +788,10 @@ for i_dir = 1:length(Folders)
                 end
 
                 % Write to mp4
-                v = VideoWriter(movieFile,'MPEG-4');
+%                 v = VideoWriter(movieFile,'MPEG-4');
+
+                % Can't render mp4 on linux cluster
+                v = VideoWriter(movieFile,'Uncompressed AVI');
                 v.FrameRate = fps;
                 v.Quality = 100;
                 open(v);
