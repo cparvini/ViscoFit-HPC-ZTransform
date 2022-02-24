@@ -744,13 +744,19 @@ elseif(strcmpi(extension,valid_extensions{4}))
                     idx_rem = find(ismember(Temp_InfoDir_Names,toRemove));
                     Temp_InfoDir_Segments(idx_rem) = [];
                 else
+                    % Remove channels we don't care about
                     toRemove = setdiff({FC_Data(:).Channel_name},Temp_InfoDir_Names);
                     idx_rem = find(ismember({FC_Data(:).Channel_name},toRemove));
                     FC_Data(idx_rem) = [];
+                    
+                    % Remove duplicates
+                    [~,ids] = unique({FC_Data(:).Channel_name});
+                    toRemove = setdiff((1:size(FC_Data,2))',ids);
+                    FC_Data(toRemove) = [];
                 end
 
                 if(size(Temp_InfoDir_Segments,1)~=size(FC_Data,2))
-                    error('Something whent wrong!! Different sized data sets (FC_data ~= Temp_InfoDir_Segments)')
+                    warning('Different sized data sets (FC_data ~= Temp_InfoDir_Segments). We could have an issue writing the correct data from the map for pixel %d.',i_pix-1)
                 end
             end
 

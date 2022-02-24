@@ -241,7 +241,7 @@ while stillRunning
                     ids = ((freq >= min(magList)) & (freq <= max(magList)));
                     
                     if sum(ids,'all') < 2
-                        xc =xc + 1;
+                        xc = xc + 1;
                         continue;
                     end
 
