@@ -129,7 +129,7 @@ end
 
 % Issue wrapper which allows script to continue if there is an empty
 % directory, or other issue during processing.
-% try
+try
     
     % Begin looping through the directories or files
     for i_dir = 1:length(Folders)
@@ -793,14 +793,14 @@ end
 
     end
     
-% catch ERROR
-%         
-%     fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
-%     fprintf('The identifier was:\n%s',ERROR.identifier);
-%     fprintf('Message:%s\n',ERROR.message);
-%     fprintf('Skipping to next directory...\n');
-% 
-% end
+catch ERROR
+        
+    fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
+    fprintf('The identifier was:\n%s',ERROR.identifier);
+    fprintf('Message:%s\n',ERROR.message);
+    fprintf('Skipping to next directory...\n');
+
+end
 
 % Clear Previous Parpool
 if ~isempty(gcp('nocreate'))

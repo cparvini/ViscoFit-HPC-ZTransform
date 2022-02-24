@@ -222,20 +222,19 @@ for i_dir = 1:length(Folders)
                 pixelHeight{ipix} = dataStruct(i).height;
             end
 
-            % Test the Fitting Functions using the Nelder-Mead Solver
             % Make a structure for our settings
             classSettings = struct;
 
-            % Test the Maxwell
             classSettings.nu = nu;                              % Sample Poisson Ratio for all curves
             classSettings.tipGeom = tipGeom;                    % Tip geometry for these experiments
             classSettings.thinSample = true;                    % Use the thin-sample correction feature
             classSettings.correctTilt = correctTilt;            % Correct any tilt in the substrate by fitting a plane to the image edges. Do NOT use for monolayers.
             classSettings.hideSubstrate = hideSubstrate;        % Remove pixels designated as "substrate" from the visco fitting
+            classSettings.zeroSubstrate = true;                 % In addition to correcting for tilt, also set the new, flat surface to have a minimum value starting at zero.
+            classSettings.optimizeFlattening = true;            % Attempt to search for the best-order polynomial surface for correction
 
             if classSettings.correctTilt
-                zeroSubstrate = true;                           % In addition to correcting for tilt, also set the new, flat surface to have a minimum value starting at zero.
-                pixelHeight = fixMapTilt(mapSize,pixelHeight,zeroSubstrate);
+                pixelHeight = fixMapTilt({mapSize},pixelHeight,classSettings.zeroSubstrate,[],classSettings.optimizeFlattening);
             end
 
             classSettings.pixelHeight = pixelHeight;            % The height for each pixel in the map. Used for thresholding/thin sample correction
