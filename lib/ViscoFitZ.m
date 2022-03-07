@@ -121,7 +121,7 @@ classdef ViscoFitZ
                         obj.nu = horzcat(temp{:});
                         obj.nu_cell = temp;
 
-                        if logical(inputSettings.thinSample)
+                        if isfield(inputSettings,'pixelHeight')
                             temp = cellfun(@(h,t) h.*ones(size(t)),inputSettings.pixelHeight,times,'UniformOutput',false);
                             obj.pixelHeight = horzcat(temp{:});
                             obj.pixelHeight_cell = inputSettings.pixelHeight;

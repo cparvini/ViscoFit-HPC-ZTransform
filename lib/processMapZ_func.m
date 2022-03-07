@@ -1,17 +1,19 @@
 function fitStructOut = processMapZ_func(fitClass,varargin)
-% PROCESSMAPZ_FUNC Fit a Viscoelastic Model to Force Map Data with 
-%Z-Transform
+% PROCESSMAPZ_FUNC Extract Viscoelastic Information using the Z-Transform
 %   This function takes in a variety of settings in addition to
 %   the data already provided to the class and analyzes it. This specific
 %   implementation utilizes the z-transform method.
 %
-%   This function will result in the extracted viscoelastic info
+%   This function will result in the observed viscoelastic information
 %   for each pixel of a force map. To do this, the pixel
 %   treatment is parallelized such that each worker handles the
-%   exrtaction procedure for a single force curve.
+%   extraction procedure for a group of pixels.
 
 % Initialize Output Structure
 tempFile = fullfile(tempdir,'fitStructTemp.mat');
+if exist(tempFile,'file') == 2
+    delete(tempFile);
+end
 fitStruct = matfile(tempFile,'Writable',true);
 
 % Default Settings
@@ -31,16 +33,16 @@ if ~isempty(varargin)
     fitOpts = varargin{1};
 
     % Get the settings provided
-    try
+    if isfield(fitOpts,'N_workers')
         N_workers = fitOpts.N_workers;
     end
-    try
+    if isfield(fitOpts,'hideSubstrate')
         hideSubstrate = fitOpts.hideSubstrate;
     end
-    try
+    if isfield(fitOpts,'smoothOpt')
         smoothOpt = fitOpts.smoothOpt;
     end
-    try
+    if isfield(fitOpts,'windowsize')
         windowsize = fitOpts.windowsize;
     end
 end
@@ -91,45 +93,48 @@ for i = 1:n_pixels
 end
 
 % Determine which pixels to ignore, if hideSubstrate == true
-% if hideSubstrate
-    [minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
-    substrateCutoff = minHeight + 100e-9;
-    pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
-    pixelOrder = 1:numel(fitClass.pixelHeight_cell);
-    pixelsToRemove = false(size(pixelHeightArray));
-    pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
-    
-    pixelSkip = 1:numel([fitClass.pixelHeight_cell{:}]);
-    pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
-    
-    if hideSubstrate
-        fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during analysis.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
-    end
-    
-%     % Look at the data in 2D
-%     figure
-%     scatter(pixelOrder(~pixelsToRemove),pixelHeightArray(~pixelsToRemove),'bo');
-%     hold on
-%     scatter(pixelOrder(pixelsToRemove),pixelHeightArray(pixelsToRemove),'rx');
-%     hold off
-%     
-%     [X,Y] = meshgrid(1:128,flip(1:128));
-%     pixelsToRemove3D = reshape(pixelsToRemove,128,128);
-%     Z = reshape(pixelHeightArray,128,128);
-%     
-%     % See the REAL map data in 3D
-%     figure
-%     scatter3(X(~pixelsToRemove3D),Y(~pixelsToRemove3D),Z(~pixelsToRemove3D),10,'b')
-%     hold on
-%     scatter3(X(pixelsToRemove3D),Y(pixelsToRemove3D),Z(pixelsToRemove3D),10,'r')
-%     hold off
+[minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
+substrateCutoff = minHeight + 100e-9;
+pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
+pixelOrder = 1:numel(fitClass.pixelHeight_cell);
+pixelsToRemove = false(size(pixelHeightArray));
+pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
 
-% else
-%     
-%     % No pixels to skip!
-%     pixelSkip = [];
-%     
-% end
+pixelSkip = 1:numel([fitClass.pixelHeight_cell{:}]);
+pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
+
+if hideSubstrate
+    fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during analysis.\n', numel(pixelSkip), numel([fitClass.pixelHeight_cell{:}]))
+end
+    
+% % Look at the data in 2D
+% figure
+% scatter(pixelOrder(~pixelsToRemove),pixelHeightArray(~pixelsToRemove),'bo');
+% hold on
+% scatter(pixelOrder(pixelsToRemove),pixelHeightArray(pixelsToRemove),'rx');
+% hold off
+% 
+% [X,Y] = meshgrid(1:128,flip(1:128));
+% pixelsToRemove3D = reshape(pixelsToRemove,128,128);
+% Z = reshape(pixelHeightArray,128,128);
+% 
+% % See the REAL map data in 3D
+% figure
+% scatter3(X(~pixelsToRemove3D),Y(~pixelsToRemove3D),Z(~pixelsToRemove3D),10,'b')
+% hold on
+% scatter3(X(pixelsToRemove3D),Y(pixelsToRemove3D),Z(pixelsToRemove3D),10,'r')
+% hold off
+
+% Create parallel pool
+poolFlag = false;           % Indicates that we have made a parpool here, and should clean it up after use.
+if isempty(gcp('nocreate'))
+    if isempty(N_workers)
+        poolobj = parpool('IdleTimeout', 120);
+    else
+        poolobj = parpool(N_workers,'IdleTimeout', 120);
+    end
+    poolFlag = true;
+end
 
 % Don't perform fitting, only smoothing the Z-Transform results
 fprintf('\nBeginning Map Analysis (No Fitting):\n');
@@ -191,10 +196,19 @@ fitStruct.frequencyMap = frequencyMap;
 fitStruct.forceMap = forceMap;
 fitStruct.indMap = indMap;
 
+fprintf('\nMap Analysis Complete!\n');
+
+% Clean out the old parpool
+if poolFlag
+   % Get the current pool
+    poolobj = gcp('nocreate');
+    delete(poolobj); 
+end
+
 % Create output and clean up the temporary file
 fitStructOut = load(fitStruct.Properties.Source,'-mat');
 clearvars fitStruct
-if exist(tempFile,'file')==2
+if exist(tempFile,'file') == 2
     delete(tempFile);
 end
 

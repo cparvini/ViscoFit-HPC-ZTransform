@@ -61,7 +61,7 @@ y(ids) = [];
 z(ids) = [];
 
 % Now, screen the heights for outliers as well
-ids = isoutlier(z);
+ids = isoutlier(z,'percentiles',[1 99]);
 x(ids) = [];
 y(ids) = [];
 z(ids) = [];
@@ -77,30 +77,43 @@ if optimizeOrder
     % the height correction for each pixel and the polynomial order
     % recommended.
     fitRes = Inf;
-    fitOrd = NaN;
+    fitOrd = {NaN,NaN};
     for ii = 1:4
         
         tempRes = Inf;
-        loopOrd = num2str(ii);
-        [sf,gof] = fit([x, y],z,['poly' loopOrd loopOrd]);
-        zShiftTemp = -feval(sf,[x2,y2]);
-%         tempRes = gof.rmse;
-        tempRes = gof.adjrsquare;
-                
-        % If this iteration improves the error, save the zShift
-        if tempRes < fitRes
-            zShift = zShiftTemp;
-            fitOrd = ii;
+        
+        for jj = 1:4
+            [sf,gof] = fit([x, y],z,['poly' num2str(ii) num2str(jj)]);
+            zShiftTemp = -feval(sf,[x2,y2]);
+    %         tempRes = gof.rmse;
+            tempRes = gof.adjrsquare;
+
+            % If this iteration improves the error, save the zShift
+            if tempRes < fitRes
+                zShift = zShiftTemp;
+                fitOrd = {ii,jj};
+            end
         end
         
     end
     
-    fprintf('\nThe optimal substrate-leveling polynomial was of order-%d\n',fitOrd);
+    fprintf('\nThe optimal substrate-leveling plane is...\na %d-order polynomial in X, and\na %d-order polynomial in Y\n\n',fitOrd{1},fitOrd{2});
     
 else
     
-    loopOrd = num2str(fitOrder);
-    [sf,~] = fit([x, y],z,['poly' loopOrd loopOrd]);
+    if any(fitOrder <= 0) || (numel(fitOrder) < 1)
+        fitOrder = 1;
+    end
+    
+    if numel(fitOrder) == 1
+        loopOrd = {num2str(fitOrder),num2str(fitOrder)};
+    elseif numel(fitOrder) == 2
+        loopOrd = {num2str(fitOrder(1)),num2str(fitOrder(2))};
+    else
+        loopOrd = {num2str(fitOrder(1)),num2str(fitOrder(2))};
+    end
+    
+    [sf,~] = fit([x, y],z,['poly' loopOrd{1} loopOrd{2}]);
     zShift = -feval(sf,[x2,y2]);
     
 end
@@ -116,11 +129,10 @@ end
 % figure
 % scatter3(x,y,z,'bo')
 % hold on
-% scatter3(x(isoutlier(z)),y(isoutlier(z)),z(isoutlier(z)),'rx')
+% % scatter3(x(isoutlier(z)),y(isoutlier(z)),z(isoutlier(z)),'rx')
 % surf(X,Y,reshape(feval(sf,[reshape(X,numel(pixelHeightList),1),reshape(Y,numel(pixelHeightList),1)]),size(Z)))
 % % surf(X,Y,reshape(cell2mat(pixelHeightList)+zShift',size(Z)))
 % % surf(X,Y,reshape(cell2mat(heightOut),size(Z)))
 % hold off
 
 end
-

@@ -10,7 +10,7 @@ function [] = singleMapClustering(originalPath,N_workers,clusterTarget,varargin)
 %   purposes. This function has a pair, globalMapClustering(), which will
 %   perform nearly the same analysis except it will combine many maps into
 %   one large clustering dataset.
-    
+
 % User-Defined Settings
 correctTilt = true;
 hideSubstrate = true;
@@ -81,6 +81,7 @@ maxCol = 5;
 maxwid = get(0,'screensize');
 maxwid = maxwid(3);
 mapColorName = 'turbo';
+mapEdgeCol = 'none';
 climMax = 2e5; % Pa
 climHeight = 15e-6; % meters, the JPK Nanowizard has a 15um piezo 
 climInd = 1000e-9; % meters
@@ -567,6 +568,7 @@ try
                         modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                         modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
                         modelAngle = atand(modelLoss./modelStorage);
+                        modelRelaxance = abs(resultsStruct.(varNames{j}).relaxanceMap{k_pixels});
 
                         % Resample to known array of frequencies                        
                         mapDataStorage(idx_pixel) = interp1(freq,modelStorage,evalPt,'makima',...
@@ -574,6 +576,8 @@ try
                         mapDataLoss(idx_pixel) = interp1(freq,modelLoss,evalPt,'makima',...
                             NaN);
                         mapDataAngle(idx_pixel) = interp1(freq,modelAngle,evalPt,'makima',...
+                            NaN);
+                        mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,evalPt,'makima',...
                             NaN);
 
                         % Has to be from the time domain
@@ -658,7 +662,7 @@ try
 
                 ax = nexttile;
 
-                surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
+                surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor',mapEdgeCol)
                 colormap(ax,'turbo')
                 hold on
                 title('Topography')
@@ -680,7 +684,7 @@ try
 
                     ax = nexttile;
 
-                    surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor','interp')
+                    surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor',mapEdgeCol)
                     colormap(ax,'turbo')
                     hold on
                     title(['Indentation' sprintf(', %d Hz',evalPt)])
@@ -723,7 +727,7 @@ try
                         plotTitle = 'Relaxance Clustering';
                 end
                 
-                surf(X,Y,mapDataHeight,mapData,'EdgeColor','interp')
+                surf(X,Y,mapDataHeight,mapData,'EdgeColor',mapEdgeCol)
                 colormap(ax,mapColorName)
                 hold on
                 title([plotTitle sprintf(', %d Hz',evalPt)])
@@ -734,16 +738,16 @@ try
                 cb = colorbar;
                 switch clusterTarget
                     case 'force'
-                        caxis([0 climMax]);
+                        caxis([0 10^ceil(log10(max(mapData,[],'all')))]);
                         temp = (cb.Ticks' .* 1e-9);
                         for ii = 1:numel(temp)
-                           cb.TickLabels{ii} = sprintf('%0.2g nN',temp(ii));
+                           cb.TickLabels{ii} = sprintf('%1.2g nN',temp(ii));
                         end
                     case 'indentation'
-                        caxis([0 climMax]);
+                        caxis([0 10^ceil(log10(max(mapData,[],'all')))]);
                         temp = (cb.Ticks' .* 1e-9);
                         for ii = 1:numel(temp)
-                           cb.TickLabels{ii} = sprintf('%0.2g nm',temp(ii));
+                           cb.TickLabels{ii} = sprintf('%1.2g nm',temp(ii));
                         end
                     case 'storage'
                         caxis([0 climMax]);
@@ -769,7 +773,7 @@ try
                 
                 ax = nexttile;
 
-                surf(X,Y,mapDataHeight,mapDataClusters,'EdgeColor','interp')
+                surf(X,Y,mapDataHeight,mapDataClusters,'EdgeColor',mapEdgeCol)
                 colormap(ax,mapColorName)
                 hold on
                 title('DTW Clusters')
@@ -786,11 +790,57 @@ try
                 saveas(mapPlotWindow,[plotFile '.fig'])
 %                 saveas(mapPlotKMeans,[plotFile '.jpg'])
                 print(mapPlotWindow,[plotFile '.png'],'-dpng','-r300');
-
+                
+                % Save Clusters to the Results File
+                resultsFile = matfile([Files(j_dir).folder filesep Files(j_dir).name],'Writable',true);
+                
+                if ~isfield(resultsFile.(varNames{j}), 'clusterData')
+                    % Create a placeholder struct where we store all of the
+                    % cluster results for each type of analysis. This is
+                    % critical, since it means we can run studies on
+                    % different clustering methods and compare results
+                    % later.
+                    temp = struct;
+                    for jj = 1:6
+                        switch jj
+                            case 1
+                                temp(jj).clusterVar = 'force';
+                                
+                            case 2
+                                temp(jj).clusterVar = 'indentation';
+                                
+                            case 3
+                                temp(jj).clusterVar = 'storage';
+                                
+                            case 4
+                                temp(jj).clusterVar = 'loss';
+                                
+                            case 5
+                                temp(jj).clusterVar = 'angle';
+                                
+                            case 6
+                                temp(jj).clusterVar = 'relaxance';                                
+                        end
+                        temp(jj).clusterMap = {};
+                        temp(jj).clusterMap2D = [];
+                        temp(jj).lastUpdate = '';
+                    end
+                    
+                    resultsFile.(varNames{j}).clusterData = temp;
+                    
+                end
+                
+                cid = find(strcmp({resultsFile.(varNames{j}).clusterData.clusterVar}, clusterTarget));
+                resultsFile.(varNames{j}).clusterData(cid).clusterMap = num2cell(idxK);
+                resultsFile.(varNames{j}).clusterData(cid).clusterMap2D = mapDataClusters;
+                resultsFile.(varNames{j}).clusterData(cid).lastUpdate = datestr(now);
+                
+                clear resultsFile
+                
             end
 
         end
-
+        
     end
     
 catch ERROR
