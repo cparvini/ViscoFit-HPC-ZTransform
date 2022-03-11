@@ -29,9 +29,9 @@ includeRetract = 0;             % Include data from the retract curve
 filterType = 'none';            % Choose the filter used to smooth data
 N = 2;                          % Order of Butterworth filter, if used
 cutoff_Hz = 5000;               % Cutoff frequency
-findRep = 'forward';            % Search direction for the repulsive region
+findRep = 'legendre';           % Search direction for the repulsive region
 removeNegatives = true;         % Remove negative values in the data stream
-createAverage = true;           % Create the averaged rows for each approach vel.
+createAverage = false;          % Create the averaged rows for each approach vel.
 
 % Read varargin values
 if ~isempty(varargin)
@@ -67,6 +67,9 @@ if ~isempty(varargin)
 end
 
 FilesCheck=dir([pathname filesep '*.*']);
+fileIgnore = {'settingsStruct','Settings','FitResults',...
+    'MapResults','PlotResults','curveStruct','mapStruct',...
+    'ClusteringResults','log.txt'};
 
 % Remove Directories
 FilesCheck=FilesCheck(~ismember({FilesCheck.name},{'.','..'}));
@@ -74,13 +77,10 @@ toRemove = find([FilesCheck.isdir] == 1);
 FilesCheck(toRemove) = [];
 
 % Remove Filetypes To Ignore
-toRemove = find(~endsWith({FilesCheck.name}, {'.ibw','.txt','.spm','.mat','.csv','.jpk-qi-data'}));
+toRemove = find(~endsWith({FilesCheck.name}, {'.ibw','.txt','.spm','.mat','.csv','.jpk-force','.jpk-qi-data'}));
 FilesCheck(toRemove) = [];
 
-toRemove = find(contains({FilesCheck.name}, {'settingsStruct','Settings'}));
-FilesCheck(toRemove) = [];
-
-toRemove = find(contains({FilesCheck.name}, {'FitResults','MapResults','PlotResults','mapStruct','log.txt'}));
+toRemove = find(contains({FilesCheck.name}, fileIgnore));
 FilesCheck(toRemove) = [];
 
 for i = 1:length(FilesCheck)
@@ -117,7 +117,7 @@ if length(FilesCheck) > 1
         
         case lower('TestCondition')
             Files=dir([pathname '/*.mat']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults'}));
+            toRemove = find(contains({Files.name}, fileIgnore));
             Files(toRemove) = [];
             for k=1:length(Files)
                 FileNames = Files(k).name;
@@ -130,7 +130,7 @@ if length(FilesCheck) > 1
             
         case lower({'HPAF','HPDE'})
             Files = dir([pathname '/*.jpk-qi-data']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
+            toRemove = find(contains({Files.name}, fileIgnore));
             Files(toRemove) = [];
             for k=1:length(Files)
                 FileNames = Files(k).name;
@@ -138,14 +138,22 @@ if length(FilesCheck) > 1
             end
             
         otherwise
-            if endsWith(FilesCheck.name, {'.jpk-qi-data'})
+            if endsWith(FilesCheck(1).name, {'.jpk-qi-data'},'IgnoreCase',true)
                 Files = dir([pathname '/*.jpk-qi-data']);
-                toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
+                toRemove = find(contains({Files.name}, fileIgnore));
                 Files(toRemove) = [];
-                for k=1:length(Files)
-                    FileNames = Files(k).name;
-                    FileInfo = strsplit(FileNames, {'_' '-' '.'},'CollapseDelimiters',true);
-                end
+%                 for k=1:length(Files)
+%                     FileNames = Files(k).name;
+%                     FileInfo = strsplit(FileNames, {'_' '-' '.'},'CollapseDelimiters',true);
+%                 end
+            elseif endsWith(FilesCheck(1).name, {'.jpk-force'},'IgnoreCase',true)
+                Files = dir([pathname '/*.jpk-force']);
+                toRemove = find(contains({Files.name}, fileIgnore));
+                Files(toRemove) = [];
+%                 for k=1:length(Files)
+%                     FileNames = Files(k).name;
+%                     FileInfo = strsplit(FileNames, {'_' '-' '.'},'CollapseDelimiters',true);
+%                 end
             else
                error('There was no built-in case for the files you have in the chosen directory. Make sure you have added a case to LoadAFMData() for your unique identifier, or are analyzing QI maps.'); 
             end
@@ -174,7 +182,7 @@ else
 
         case lower('TestCondition')
             Files=dir([pathname '/*.mat']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
+            toRemove = find(contains({Files.name}, fileIgnore));
             Files(toRemove) = [];
             
             FileNames = Files.name;
@@ -186,16 +194,23 @@ else
             
         case lower({'HPAF','HPDE'})
             Files = dir([pathname '/*.jpk-qi-data']);
-            toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
+            toRemove = find(contains({Files.name}, fileIgnore));
             Files(toRemove) = [];
             
             FileNames = Files.name;
             FileInfo = strsplit(FileNames, {'_' '-' '.'},'CollapseDelimiters',true);
 
         otherwise
-            if endsWith(FilesCheck.name, {'.jpk-qi-data'})
+            if endsWith(FilesCheck.name, {'.jpk-qi-data'},'IgnoreCase',true)
                 Files = dir([pathname '/*.jpk-qi-data']);
-                toRemove = find(contains({Files.name}, {'settingsStruct','Settings','FitResults','MapResults','PlotResults'}));
+                toRemove = find(contains({Files.name}, fileIgnore));
+                Files(toRemove) = [];
+
+                FileNames = Files.name;
+                FileInfo = strsplit(FileNames, {'_' '-' '.'},'CollapseDelimiters',true);
+            elseif endsWith(FilesCheck.name, {'.jpk-force'},'IgnoreCase',true)
+                Files = dir([pathname '/*.jpk-force']);
+                toRemove = find(contains({Files.name}, fileIgnore));
                 Files(toRemove) = [];
 
                 FileNames = Files.name;
@@ -509,6 +524,126 @@ for k = 1:length(Files)
                 end
 
                 clearvars fileStruct
+              
+            elseif endsWith(Files(k).name, {'.jpk-force'})
+                
+                % This is the case for JPK Force Curve analysis. The data
+                % used here was collected using a JPK AFM and all of the
+                % files in a particular directory must be sucessively
+                % loaded, processed, and combined into a useful dataset for
+                % analysis later.
+
+                % Using the "open_JPK" function, which has been adapted from
+                % the original version on the MEX from Dr. Ortuso, R.D., each
+                % curve is introduced as a row in the dataStruct, with a
+                % label that will store each filename as a unique IDs so 
+                % the data can be identified later on.
+                if contains(FileInfo{1},{'force-save'})
+                    temp = strsplit(Files(1).folder,filesep);
+                    FileInfo{1} = temp{end};
+                end
+                oldCurves = dir([Files(k).folder filesep sprintf('curveStruct-%s.mat',FileInfo{1})]);
+                
+                if isempty(oldCurves)
+                    fileStruct = cell(length(Files),2);
+                    tic
+                    for k_curve = 1:length(Files)
+                        fileStructTemp = [];
+                        fileStructTemp = open_JPK([Files(k_curve).folder filesep Files(k_curve).name]);
+                        fileStruct{k_curve,1} = fileStructTemp;
+                        fileStruct{k_curve,2} = Files(k_curve).name;
+                    end
+                    loadTime = toc;
+                    fprintf('\nIt took %6.2f minutes to load the force curves in the directory:\n%s.\n',loadTime/60,Files(k).folder)
+                    save([Files(k).folder filesep sprintf('curveStruct-%s.mat',FileInfo{1})],'fileStruct','-v7.3');
+                else
+                    % Load the previous filestruct and verify that we have
+                    % not added any data to the directory. If we have, add
+                    % that dataset to our structure and re-save!
+                    load([oldCurves.folder filesep oldCurves.name]);
+                    
+                    if size(fileStruct,1) ~= length(Files)
+                        tic
+                        n_new = 0;
+                        n_rem = 0;
+                        % Add new curves from directory
+                        for k_curve = 1:length(Files)
+                            if isempty(find(strcmpi(fileStruct(:,2), Files(k_curve).name),1))
+                                n_new = n_new + 1;
+                                fileStructTemp = [];
+                                fileStructTemp = open_JPK([Files(k_curve).folder filesep Files(k_curve).name]);
+                                fileStruct = vertcat(fileStruct,{fileStructTemp,Files(k_curve).name});                                
+                            end
+                        end
+                        % Remove curves that aren't in directory
+                        remID = false(1,numel(fileStruct(:,2)));
+                        for k_curve = 1:numel(fileStruct(:,2))
+                            if isempty(find(strcmpi({Files(:).name}, fileStruct{k_curve,2}),1))
+                                n_rem = n_rem + 1;
+                                remID(k_curve) = true;
+                            end
+                        end
+                        fileStruct(remID,:) = [];
+                        loadTime = toc;
+                        fprintf('\nIt took %6.2f minutes to add %d NEW force curves and remove %d others from our record in the directory:\n%s.\n',loadTime/60,n_new,n_rem,Files(k).folder)
+                        save([Files(k).folder filesep sprintf('curveStruct-%s.mat',FileInfo{1})],'fileStruct','-v7.3');
+                    end
+                    
+                end
+                
+                numCurves = size(fileStruct,1);
+                
+                for i_pix = (1:numCurves)
+                    % Store MapID
+                    dataStruct(i_pix).curveid = i_pix;
+                    dataStruct(i_pix).fname = fileStruct{i_pix,2};
+
+                    % Store the Z-Extension measurements from the map
+                    idx = find(contains({fileStruct{i_pix,1}(:).Channel_name},'height'),1);
+                    dataStruct(i_pix).z = fileStruct{i_pix,1}(idx).extend.Data_nominal;
+                    dataStruct(i_pix).z = vertcat(dataStruct(i_pix).z,fileStruct{i_pix,1}(idx).retract.Data_nominal);
+                    
+                    % For the force curves, we are given height not
+                    % extension. So, convert by shifting all points
+                    % negative, and then flipping. This should force the
+                    % point of max indentation to coincide with the max
+                    % z-extension.
+                    dataStruct(i_pix).z = -(dataStruct(i_pix).z - max(dataStruct(i_pix).z,[],'all'));
+                    
+                    % Store the Force and deflection
+                    idx = find(contains({fileStruct{i_pix,1}(:).Channel_name},'vDeflection'),1);
+                    dataStruct(i_pix).d = fileStruct{i_pix,1}(idx).extend.Data_distance;
+                    dataStruct(i_pix).d = vertcat(dataStruct(i_pix).d,fileStruct{i_pix,1}(idx).retract.Data_distance);
+                    dataStruct(i_pix).F = fileStruct{i_pix,1}(idx).extend.Data_force;
+                    dataStruct(i_pix).F = vertcat(dataStruct(i_pix).F,fileStruct{i_pix,1}(idx).retract.Data_force);
+                    
+                    % Store the time array. Use the timestep (dt) to calculate
+                    % the retract time, too.
+                    idx = find(strcmpi({fileStruct{i_pix,1}(:).Channel_name},'t'),1);
+                    dataStruct(i_pix).t = fileStruct{i_pix,1}(idx).extend;
+                    if isrow(dataStruct(i_pix).t)  dataStruct(i_pix).t =  dataStruct(i_pix).t'; end
+                    dataStruct(i_pix).dt = mode(round(gradient(dataStruct(i_pix).t),3,'significant'));
+                    dataStruct(i_pix).t = vertcat( dataStruct(i_pix).t,...
+                        (dataStruct(i_pix).dt.*(1:length(fileStruct{i_pix,1}(idx).retract))'+dataStruct(i_pix).t(end)) );
+
+                    v_approach(i_pix) = round(mean(abs(gradient(dataStruct(i_pix).z)./dataStruct(i_pix).dt)),2,'significant');  % Approach Velocity, m/s
+                    
+                    idx = find(contains({fileStruct{i_pix,1}(:).Channel_name},'stiffness'),1);
+                    if ~isempty(idx)
+                        k_cantilever(i_pix) = fileStruct{i_pix,1}(idx).extend;
+                    else
+                        % No reported stiffness. Estimate using deflection
+                        % and measured force
+                        idx = find(contains({fileStruct{i_pix,1}(:).Channel_name},'vDeflection'),1);
+                        k_cantilever(i_pix) = round(str2double(fileStruct{i_pix,1}(idx).force.Multiplier),4,'significant');
+                    end
+                    dataStruct(i_pix).k_cantilever = k_cantilever(i_pix);
+                    dataStruct(i_pix).nu_sample = 0.5;  % Poisson's Ratio of the sample
+
+                end
+
+                clearvars fileStruct
+                break;
                 
             else
                error('There was no built-in case for handling the files you have in the chosen directory. Make sure you have added a case to LoadAFMData() for your unique identifier, or are analyzing QI maps.'); 

@@ -2,12 +2,12 @@
 # Swarm command:
 # swarm -t 56 -g 128 -f simClusters_swarm.swarm --module=matlab --time 4-00:00:00 --gres=lscratch:100 --job-name PanCAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
 # To debug first and test what SLURM sees:
-# swarm -t 56 -g 128 --devel -f simclusters_swarm.swarm --module=matlab --time 4-00:00:00 --gres=lscratch:100 --job-name PanCAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+# swarm -t 56 -g 128 --devel -f simClusters_swarm.swarm --module=matlab --time 4-00:00:00 --gres=lscratch:100 --job-name PanCAnalyze --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
- matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/simData/awgn/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/simData/awgn/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
- matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/simData/clean/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/simData/clean/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
- matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/simData/brown/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/simData/brown/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
 export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
- matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/ViscoFitZ-HPC/simData/pink/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/parvinich/simData/pink/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,5,10); exit;"

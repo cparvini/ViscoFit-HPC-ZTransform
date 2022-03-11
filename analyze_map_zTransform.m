@@ -17,7 +17,7 @@ if nargin > 3
                         hideSubstrate = varargin{i};
                     end
                 otherwise
-                    fprintf('Passed additional parameters to fit_map() which were not used.');
+                    fprintf('Passed additional parameters to analyze_map_zTransform() which were not used.');
             end
         end
     end

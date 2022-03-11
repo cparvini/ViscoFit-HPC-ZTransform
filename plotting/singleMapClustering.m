@@ -356,7 +356,7 @@ try
                     end
 
                 end
-
+                
                 heightImg = reshape(pixelHeightArray,mapSize);
                 clusteringData = NaN(numel(mapDataHeight),numel(magList));
                 pixelLog = NaN(numel(mapDataHeight),2);
@@ -738,25 +738,25 @@ try
                 cb = colorbar;
                 switch clusterTarget
                     case 'force'
-                        caxis([0 10^ceil(log10(max(mapData,[],'all')))]);
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
                         temp = (cb.Ticks' .* 1e-9);
                         for ii = 1:numel(temp)
                            cb.TickLabels{ii} = sprintf('%1.2g nN',temp(ii));
                         end
                     case 'indentation'
-                        caxis([0 10^ceil(log10(max(mapData,[],'all')))]);
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
                         temp = (cb.Ticks' .* 1e-9);
                         for ii = 1:numel(temp)
                            cb.TickLabels{ii} = sprintf('%1.2g nm',temp(ii));
                         end
                     case 'storage'
-                        caxis([0 climMax]);
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
                         temp = (cb.Ticks' .* 1e-3);
                         for ii = 1:numel(temp)
                            cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
                         end
                     case 'loss'
-                        caxis([0 climMax]);
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
                         temp = (cb.Ticks' .* 1e-3);
                         for ii = 1:numel(temp)
                            cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
@@ -792,9 +792,7 @@ try
                 print(mapPlotWindow,[plotFile '.png'],'-dpng','-r300');
                 
                 % Save Clusters to the Results File
-                resultsFile = matfile([Files(j_dir).folder filesep Files(j_dir).name],'Writable',true);
-                
-                if ~isfield(resultsFile.(varNames{j}), 'clusterData')
+                if ~isfield(resultsStruct.(varNames{j}), 'clusterData')
                     % Create a placeholder struct where we store all of the
                     % cluster results for each type of analysis. This is
                     % critical, since it means we can run studies on
@@ -826,16 +824,29 @@ try
                         temp(jj).lastUpdate = '';
                     end
                     
-                    resultsFile.(varNames{j}).clusterData = temp;
+                    resultsStruct.(varNames{j}).clusterData = temp;
                     
                 end
                 
-                cid = find(strcmp({resultsFile.(varNames{j}).clusterData.clusterVar}, clusterTarget));
-                resultsFile.(varNames{j}).clusterData(cid).clusterMap = num2cell(idxK);
-                resultsFile.(varNames{j}).clusterData(cid).clusterMap2D = mapDataClusters;
-                resultsFile.(varNames{j}).clusterData(cid).lastUpdate = datestr(now);
+                cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
+                resultsStruct.(varNames{j}).clusterData(cid).clusterMap = num2cell(idxK');
+                resultsStruct.(varNames{j}).clusterData(cid).clusterMap2D = mapDataClusters;
+                resultsStruct.(varNames{j}).clusterData(cid).lastUpdate = datestr(now);
                 
-                clear resultsFile
+                if isfield(resultsStruct.(varNames{j}), 'trueBinsMap')
+                    
+                    % This is a test dataset where we have the "true" bins
+                    % available. Quickly determine whether we have any
+                    % incorrect values, and from that imply our accuracy.
+                    binDelta = (mapDataClusters ~= resultsStruct.(varNames{j}).trueBinsMap);
+                    clusterAcc = 1 - (sum(binDelta,'all') / numel(binDelta));
+                    fprintf('\nThe Clustering Accuracy was %.2f%%\n',100*clusterAcc);
+                    resultsStruct.(varNames{j}).clusterData(cid).clusterAccuracy = 100*clusterAcc;
+                    
+                end
+                
+                % Overwrite the old results
+                save([Files(j_dir).folder filesep Files(j_dir).name],'-struct','resultsStruct','-v7.3');
                 
             end
 
@@ -845,9 +856,10 @@ try
     
 catch ERROR
         
-    fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
+    fprintf('ERROR Clustering Directory #%d of %d\n',i_dir,length(Folders));
     fprintf('The identifier was:\n%s',ERROR.identifier);
     fprintf('Message:%s\n',ERROR.message);
+    fprintf('Line Number:%d\n',ERROR.stack(end).line);
     fprintf('Skipping to next directory...\n');
 
 end

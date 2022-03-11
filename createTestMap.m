@@ -137,76 +137,9 @@ for k = 1:length(Files)
     end
     
     dataStruct(k).thinSample = false;
-    
-    % Settings
-    SNR = noiseMag;
-    signalPower = sum(RawData.d.^2)/numel(RawData.d);
-    
-    switch noiseType
-        case 'awgn'
-            % white gaussian noise
-            dataStruct(k).d = awgn(dataStruct(k).d,SNR,'measured');
-
-        case 'pink'
-            temp = dsp.ColoredNoise('pink',numel(dataStruct(k).d),1);
-            noise = temp();
-            if ~isrow(noise)
-                noise = noise';
-            end
-            noisePower = sum(noise.^2)/numel(noise);
-            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
-            dataStruct(k).d = dataStruct(k).d + noise*scaleFactor;
-
-        case 'white'
-            temp = dsp.ColoredNoise('white',numel(dataStruct(k).d),1);
-            noise = temp();
-            if ~isrow(noise)
-                noise = noise';
-            end
-            noisePower = sum(noise.^2)/numel(noise);
-            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
-            dataStruct(k).d = dataStruct(k).d + noise*scaleFactor;
-
-        case 'brown'
-            temp = dsp.ColoredNoise('brown',numel(dataStruct(k).d),1);
-            noise = temp();
-            if ~isrow(noise)
-                noise = noise';
-            end
-            noisePower = sum(noise.^2)/numel(noise);
-            scaleFactor = sqrt(signalPower./(noisePower*(10^(SNR/10))));
-            dataStruct(k).d = dataStruct(k).d + noise*scaleFactor;
-
-        case 'blue'
-            temp = dsp.ColoredNoise('blue',numel(dataStruct(k).d),1);
-            noise = temp();
-            if ~isrow(noise)
-                noise = noise';
-            end
-            noisePower = sum(noise.^2)/numel(noise);
-            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
-            dataStruct(k).d = dataStruct(k).d + noise*scaleFactor;
-
-        case 'purple'
-            temp = dsp.ColoredNoise('purple',numel(dataStruct(k).d),1);
-            noise = temp();
-            if ~isrow(noise)
-                noise = noise';
-            end
-            noisePower = sum(noise.^2)/numel(noise);
-            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
-            dataStruct(k).d = dataStruct(k).d + noise*scaleFactor;
-
-        otherwise
-            % Do nothing
-    end
 
 %     % Quick Look
 %     plot(dataStruct(k).t,RawData.d)
-%     hold on
-%     plot(dataStruct(k).t,dataStruct(k).d)
-%     legend('Original','Noisy')
-%     hold off
     
 end
 
@@ -582,6 +515,7 @@ tipSize = cell(1,n_pixels);
 nu = cell(1,n_pixels);
 mapSizeAll = cell(1,n_pixels);
 pixelHeight = cell(1,n_pixels);
+trueParams = cell(1,n_pixels);
 
 % Create a roster of pixels
 xdata = 1:mapSize(1);
@@ -621,8 +555,71 @@ for k = 1:n_pixels
     nu{k} = dataStruct(rowID).nu_sample;
     mapSizeAll{k} = mapSize;
     pixelHeight{k} = heightMat(idx_pixel).*maxHeight;
+    trueParams{k} = dataStruct(rowID).trueParams;
     
-    forces{k} = dataStruct(rowID).F_r;
+    % Settings
+    SNR = noiseMag;
+    signalPower = sum(dataStruct(rowID).F_r.^2)/numel(dataStruct(rowID).F_r);
+    
+    switch noiseType
+        case 'awgn'
+            % white gaussian noise
+            forces{k} = awgn(dataStruct(rowID).F_r,SNR,'measured');
+            
+        case 'pink'
+            temp = dsp.ColoredNoise('pink',numel(dataStruct(rowID).F_r),1);
+            noise = temp();
+            if ~isrow(noise)
+                noise = noise';
+            end
+            noisePower = sum(noise.^2)/numel(noise);
+            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+            forces{k} = dataStruct(rowID).F_r + noise*scaleFactor;
+            
+        case 'white'
+            temp = dsp.ColoredNoise('white',numel(dataStruct(rowID).F_r),1);
+            noise = temp();
+            if ~isrow(noise)
+                noise = noise';
+            end
+            noisePower = sum(noise.^2)/numel(noise);
+            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+            forces{k} = dataStruct(rowID).F_r + noise*scaleFactor;
+            
+        case 'brown'
+            temp = dsp.ColoredNoise('brown',numel(dataStruct(rowID).F_r),1);
+            noise = temp();
+            if ~isrow(noise)
+                noise = noise';
+            end
+            noisePower = sum(noise.^2)/numel(noise);
+            scaleFactor = sqrt(signalPower./(noisePower*(10^(SNR/10))));
+            forces{k} = dataStruct(rowID).F_r + noise*scaleFactor;
+            
+        case 'blue'
+            temp = dsp.ColoredNoise('blue',numel(dataStruct(rowID).F_r),1);
+            noise = temp();
+            if ~isrow(noise)
+                noise = noise';
+            end
+            noisePower = sum(noise.^2)/numel(noise);
+            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+            forces{k} = dataStruct(rowID).F_r + noise*scaleFactor;
+            
+        case 'purple'
+            temp = dsp.ColoredNoise('purple',numel(dataStruct(rowID).F_r),1);
+            noise = temp();
+            if ~isrow(noise)
+                noise = noise';
+            end
+            noisePower = sum(noise.^2)/numel(noise);
+            scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+            forces{k} = dataStruct(rowID).F_r + noise*scaleFactor;
+            
+        otherwise
+            % Do nothing
+    end
+    
     times{k} = dataStruct(rowID).t_r;
     indentations{k} = dataStruct(rowID).h_r;
     
@@ -668,6 +665,8 @@ if isempty(zTransformAnalysis.ViscoClass)
     zTransformAnalysis.ViscoClass = viscoZ;
 end
 
+zTransformAnalysis.trueParamsMap = trueParams;
+zTransformAnalysis.trueBinsMap = binRoster;
 zTransformAnalysis.mapSize = mapSize;
 zTransformAnalysis.windowsize = extractionSettings.windowsize;
 zTransformAnalysis.smoothOpt = extractionSettings.smoothOpt;

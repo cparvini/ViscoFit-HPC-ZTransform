@@ -567,6 +567,28 @@ elseif(strcmpi(extension,valid_extensions{2}))
         clearvars segment_metadata_raw Temp_InfoDir_Segments
     end
     
+    FC_Data(numel(FC_Data)+1).Channel_name = 't';
+    header_location2=fullfile(InfoDir(1).folder,'header.properties');
+    fid=fopen(header_location2);
+    header_metadata_raw2=textscan(fid,'%s');
+    header_metadata_raw2=header_metadata_raw2{1,1};
+    fclose(fid);
+    for j = 1:size(header_metadata_raw2,1)
+        if contains(header_metadata_raw2{j,1},'force-scan-series.header.force-settings.extend-scan-time')
+            temp = strsplit(header_metadata_raw2{j,1},'=');
+            tempDuration = str2num(temp{1,2}); % units are in seconds
+            tempDatapoints = numel(FC_Data(3).extend.Data_Raw);
+            dt_est = round(tempDuration/tempDatapoints,3,'significant');
+            FC_Data(end).extend = ((1:tempDatapoints)').*dt_est;
+        elseif contains(header_metadata_raw2{j,1},'force-scan-series.header.force-settings.retract-scan-time')
+            temp = strsplit(header_metadata_raw2{j,1},'=');
+            tempDuration = str2num(temp{1,2}); % units are in seconds
+            tempDatapoints = numel(FC_Data(3).retract.Data_Raw);
+            dt_est = round(tempDuration/tempDatapoints,3,'significant');
+            FC_Data(end).retract = ((1:tempDatapoints)').*dt_est;
+        end
+    end
+    
     varargout{1}=FC_Data;
     
 elseif(strcmpi(extension,valid_extensions{4}))

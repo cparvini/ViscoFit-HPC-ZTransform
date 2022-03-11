@@ -90,6 +90,9 @@ try
     
     % Begin looping through the directories or files
     for i_dir = 1:length(Folders)
+        
+        fprintf('\nBeginning Animation for Directory #%d of %d\n',i_dir,length(Folders));
+        
         path = Folders{i_dir};
         Files = dir([path filesep '*Results*zTransform*.mat']);
 
@@ -227,6 +230,53 @@ try
                 pixelSkip = 1:numel(pixelHeightArray);
                 pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
 
+                % Figure out the best limits for each subfigure
+                forceMax = 0;
+                indMax = 0;
+                storMax = 0;
+                lossMax = 0;
+                relaxMax = 0;
+                for k_pixels = 1:numel(pixelHeightArray)
+                    
+                    % Skip the hidden pixels
+                    if hideSubstrate && any(ismember(k_pixels,pixelSkip))
+                        continue;
+                    end
+                    
+                    % Update Force
+                    if max(resultsStruct.(varNames{j}).forceMap{k_pixels},[],'all') > forceMax
+                        forceMax = max(resultsStruct.(varNames{j}).forceMap{k_pixels},[],'all');
+                    end
+                    
+                    % Update Indentation
+                    if max(resultsStruct.(varNames{j}).indMap{k_pixels},[],'all') > indMax
+                        indMax = max(resultsStruct.(varNames{j}).indMap{k_pixels},[],'all');
+                    end
+                    
+                    % Update Relaxance
+                    if max(resultsStruct.(varNames{j}).relaxanceMap{k_pixels},[],'all') > relaxMax
+                        relaxMax = max(resultsStruct.(varNames{j}).relaxanceMap{k_pixels},[],'all');
+                    end
+                    
+                    % Update Storage Mod
+                    temp1 = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
+                    if max(temp1,[],'all') > storMax
+                        storMax = max(temp1,[],'all');
+                    end
+                    
+                    % Update Loss Mod
+                    temp2 = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
+                    if max(temp2,[],'all') > lossMax
+                        lossMax = max(temp2,[],'all');
+                    end
+                    
+                end
+                forceMax = 10^(ceil(log10(forceMax)));
+                indMax = 10^(ceil(log10(indMax)));
+                storMax = 10^(ceil(log10(storMax)));
+                lossMax = 10^(ceil(log10(lossMax)));
+                relaxMax = 10^(ceil(log10(relaxMax)));
+                
                 for k_freq = 1:numel(freqList)
 
                     % Prep the movie
@@ -679,7 +729,7 @@ try
                         xlim([1 max(mapSize)])
                         ylim([1 max(mapSize)])
                         cb = colorbar;
-                        caxis([0 climInd]); % Absolute scale
+                        caxis([0 indMax]); % Absolute scale
                         temp = (cb.Ticks' ./ 1e-9);
                         for ii = 1:numel(temp)
                            cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
@@ -701,7 +751,7 @@ try
                     xlim([1 max(mapSize)])
                     ylim([1 max(mapSize)])
                     cb = colorbar;
-                    caxis([0 climMax]);
+                    caxis([0 storMax]);
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
@@ -720,7 +770,7 @@ try
                     xlim([1 max(mapSize)])
                     ylim([1 max(mapSize)])
                     cb = colorbar;
-                    caxis([0 climMax]);
+                    caxis([0 lossMax]);
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
@@ -804,6 +854,8 @@ try
             end
 
         end
+        
+        fprintf('Animation Complete for Directory #%d of %d\n',i_dir,length(Folders));
 
     end
     
@@ -812,6 +864,7 @@ catch ERROR
     fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
     fprintf('The identifier was:\n%s',ERROR.identifier);
     fprintf('Message:%s\n',ERROR.message);
+    fprintf('Line Number:%d\n',ERROR.stack(end).line);
     fprintf('Skipping to next directory...\n');
 
 end
