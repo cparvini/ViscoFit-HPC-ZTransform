@@ -617,7 +617,7 @@ for k = 1:n_pixels
             forces{k} = dataStruct(rowID).F_r + noise*scaleFactor;
             
         otherwise
-            % Do nothing
+            forces{k} = dataStruct(rowID).F_r
     end
     
     times{k} = dataStruct(rowID).t_r;
