@@ -1,4 +1,4 @@
-function [] = createTestMap(startDir,saveLabel,varargin)
+function [] = createTestMap(startDir,saveDir,saveLabel,varargin)
 %CREATETESTMAP Create A Simulated QI Map Using Simulated SFS Results
 %   Taking in a directory (startDir), this function will create a
 %   bullseye-shaped map using all of the simulation results available
@@ -673,7 +673,7 @@ zTransformAnalysis.smoothOpt = extractionSettings.smoothOpt;
 zTransformAnalysis.correctTilt = classSettings.correctTilt;
 zTransformAnalysis.hideSubstrate = extractionSettings.hideSubstrate;
 zTransformAnalysis.thinSample = classSettings.thinSample;
-save([startDir filesep saveLabel '_MapResults_zTransform.mat'],'zTransformAnalysis','-v7.3')
+save([saveDir filesep saveLabel '_MapResults_zTransform.mat'],'zTransformAnalysis','-v7.3')
 
 analysisTime = toc;
 fprintf('\nZ-Transform Analysis Time: %4.2f Minutes\n',analysisTime/60);

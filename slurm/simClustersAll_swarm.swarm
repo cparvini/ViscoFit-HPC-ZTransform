@@ -1,0 +1,37 @@
+# Analyze and Animate Simulations of Melanocytes, Melanoma, and Fibroblasts Swarm (No Fitting, No Compiler)
+# Swarm command:
+# swarm -t 56 -g 128 -f simClustersAll_swarm.swarm --module=matlab --time 2-00:00:00 --gres=lscratch:100 --job-name simClustersAll --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+# To debug first and test what SLURM sees:
+# swarm -t 56 -g 128 --devel -f simClustersAll_swarm.swarm --module=matlab --time 2-00:00:00 --gres=lscratch:100 --job-name simClustersAll --logdir /home/parvinich/logs --merge-output --sbatch "--mail-type=FAIL"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-20/awgn/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-20/clean/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-20/brown/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-20/pink/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-30/awgn/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-30/clean/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-30/brown/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-30/pink/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-40/awgn/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-40/clean/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-40/brown/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-40/pink/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-50/awgn/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-50/clean/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-50/brown/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/parvinich/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); addpath(genpath('testing')); startDir='/data/parvinich/simData/SNR-50/pink/'; makeZAnimation(startDir,0,0,0,0,1,1); testClustering(startDir,28,0,0,0,0,0,1,1,500,10,10); exit;"
