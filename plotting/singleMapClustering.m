@@ -20,7 +20,7 @@ fillPixels = true;
 logSteps = true;
 plotIndentation = true;
 evalPt = 1000;
-n_reps = 10; % number of clustering replicates
+n_reps = 100; % number of clustering replicates
 maxK = 10; % Max number of cluster bins
 if nargin > 1
     if ~isempty(varargin)
@@ -138,7 +138,7 @@ try
         Files = dir([path filesep '*Results*zTransform*.mat']);
 
         if isempty(Files)
-            error('The directory you selected does not contain a Z-Transform QI map. Please verify your FitResults file is in that directory and the filename contains "zTransform".');
+            error('The directory you selected does not contain a Z-Transform QI map. Please verify your results file is in that directory and the filename contains "zTransform".');
         end
 
         fileLabels = cell(numel(Files),1);
@@ -224,6 +224,7 @@ try
                 end
                 magList = unique(magList);
                 freqList = flip(magList);
+                timeList = 1./magList;
 
                 if isfield(resultsStruct.(varNames{j}),'bestParams')
                     plotModel = true;
@@ -596,22 +597,34 @@ try
 
                     switch clusterTarget
                         case 'force'
+                            xinterp = t_t;
+                            obsList = timeList;
                             clusterInterp = F_t;
                         case 'indentation'
+                            xinterp = t_t;
+                            obsList = timeList;
                             clusterInterp = h_t;
                         case 'storage'
+                            xinterp = freq;
+                            obsList = magList;
                             clusterInterp = modelStorage;
                         case 'loss'
+                            xinterp = freq;
+                            obsList = magList;
                             clusterInterp = modelLoss;
                         case 'angle'
+                            xinterp = freq;
+                            obsList = magList;
                             clusterInterp = modelAngle;
                         case 'relaxance'
+                            xinterp = freq;
+                            obsList = magList;
                             clusterInterp = modelRelaxance;
                     end
 
                     try
                         % Resample to known array of frequencies
-                        obsOut = interp1(freq,clusterInterp,magList,'makima',...
+                        obsOut = interp1(xinterp,clusterInterp,obsList,'makima',...
                             NaN);
                         clusteringData(k_pixels,:) = obsOut;
                     catch
@@ -629,6 +642,18 @@ try
                     % time series if possible
                     
                 end
+                
+                % Perform some data cleaning. Columns where we don't have enough
+                % observations compared to bins are a PROBLEM. We have to remove
+                % these before analyzing.
+                dataVerify = ~isnan(clusteringData);
+                goodCols = sum(dataVerify,1);
+                idRem = goodCols < maxK;
+
+                magList(idRem) = [];
+                freqList(idRem) = [];
+                timeList(idRem) = [];
+                clusteringData(:,idRem) = [];
 
                 opts = statset('UseParallel',parallelSet,...
                     'MaxIter',1e2,...
@@ -838,11 +863,77 @@ try
                     % This is a test dataset where we have the "true" bins
                     % available. Quickly determine whether we have any
                     % incorrect values, and from that imply our accuracy.
-                    binDelta = (mapDataClusters ~= resultsStruct.(varNames{j}).trueBinsMap);
-                    clusterAcc = 1 - (sum(binDelta,'all') / numel(binDelta));
-                    fprintf('\nThe Clustering Accuracy was %.2f%%\n',100*clusterAcc);
-                    resultsStruct.(varNames{j}).clusterData(cid).clusterAccuracy = 100*clusterAcc;
                     
+                    nBins = max(unique(idxK),[],'all');
+                    
+                    for jj = 1:numel([resultsStruct.(varNames{j}).clusterData(:)])
+
+                        % Loop through all of the observables used
+                        if isempty(resultsStruct.(varNames{j}).clusterData(jj).clusterMap2D)
+                            % Obviously we didn't analyze this observable,
+                            % because there are no results!
+                            continue;
+                        end
+                        
+                        clusterAcc = 0;
+                        
+                        for kk = 1:nBins
+
+                            % The clustered bins might not be in the correct
+                            % "orientation". This would mean that the clustering
+                            % could have correctly separated the regions, BUT it
+                            % assigned the innermost bin as #1 instead of #3 for
+                            % example. So we will loop through the combos and
+                            % ensure we have the highest accuracy calculation
+                            % possible.
+
+                            % Cycle through the bin orientations
+                            if kk == 1
+                                mapDataClusters = resultsStruct.(varNames{j}).clusterData(jj).clusterMap2D;
+                            else
+                                mapDataClusters = mapDataClusters - 1;
+                            end
+                            mapDataClusters(mapDataClusters == 0) = nBins;
+
+                            binDelta = (mapDataClusters ~= resultsStruct.(varNames{j}).trueBinsMap);
+                            temp = 1 - (sum(binDelta,'all') / numel(binDelta));
+
+                            if kk == 1
+
+                                % This is the original configuration. This
+                                % info is already saved in the output
+                                % structure.
+                                clusterAcc = temp;
+
+                            elseif temp > clusterAcc
+
+                                % The clustering resulted in swapped
+                                % positions (i.e. it put "2" where the true
+                                % solution has "3" and/or vice versa). It
+                                % correctly separated the regions, BUT the
+                                % number is wrong. We should update all of
+                                % our results to use the configuration
+                                % closest to our ground truth.
+                                clusterAcc = temp;
+                                
+                                idxKnew = NaN(size(idxK));
+                                for k_cluster = 1:numel(idxKnew)
+                                    idxKnew(k_cluster) = mapDataClusters(pixelLog(k_cluster,1),pixelLog(k_cluster,2));
+                                end
+                                if ~isrow(idxKnew) idxKnew = idxKnew'; end
+                                
+                                resultsStruct.(varNames{j}).clusterData(jj).clusterMap = num2cell(idxKnew);
+                                resultsStruct.(varNames{j}).clusterData(jj).clusterMap2D = mapDataClusters;
+                                resultsStruct.(varNames{j}).clusterData(jj).lastUpdate = datestr(now);
+
+                            end
+
+                        end
+                        
+                        fprintf('\nThe Clustering Accuracy was %3.2f%% (%s)\n',100*clusterAcc, resultsStruct.(varNames{j}).clusterData(jj).clusterVar);
+
+                    end
+                                        
                 end
                 
                 % Overwrite the old results

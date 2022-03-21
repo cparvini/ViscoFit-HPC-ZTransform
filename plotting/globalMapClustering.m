@@ -1,17 +1,34 @@
-function [] = makeZAnimation(originalPath,varargin)
-%makeAnimation Create an Animation using Z-Transform Method
-%   This function takes in a path argument and will subsequently create an
-%   animation showing the viscoelastic properties from a Z-Transform
-%   Results file. The results file is created using either the
-%   "analyze_map_zTransform" function or "fit_map_zTransform".
-    
+function [] = globalMapClustering(originalPath,N_workers,clusterTarget,varargin)
+%GLOBALMAPCLUSTERING Perform K-Medoids Clustering of Many QI Map
+%   This function takes in a path argument, the target variable for
+%   clustering with k-medoids, and a variable number of arguments used to
+%   correct/shift the map representations. Note that the only non-boolean
+%   option for varargin is evalPt, which is the frequency (in Hz) to use
+%   for plotting the frequency-dependent properties from the QI map. The
+%   full spectrum of frequencies available for each pixel are used in the
+%   clustering process, and evalPt is exclusively for visualization
+%   purposes. This function has a pair, singleMapClustering(), which will
+%   perform nearly the same analysis except it only considers a single QI
+%   map at once.
+%
+%   By searching recursively in a directory, this file creates a large
+%   array of clustering data that includes all of the cell pixels from
+%   every map in the subdirectories under the target. This is intended to
+%   be run on QI maps for samples of the same condition (e.g. cell line and
+%   stage, treatment, etc.) such that the clustering is less susceptible to
+%   single-map noise or feature issues.
+
 % User-Defined Settings
 correctTilt = true;
 hideSubstrate = true;
 zeroSubstrate = true;
+optimizeFlattening = false;
 fillPixels = true;
-plotIndentation = true;
 logSteps = true;
+plotIndentation = true;
+evalPt = 1000;
+n_reps = 100; % number of clustering replicates
+maxK = 10; % Max number of cluster bins
 if nargin > 1
     if ~isempty(varargin)
         for i = 1:numel(varargin)
@@ -30,15 +47,31 @@ if nargin > 1
                     end
                 case 4
                     if ~isempty(varargin{i})
-                        fillPixels = varargin{i};                        
+                        optimizeFlattening = varargin{i};                        
                     end
                 case 5
                     if ~isempty(varargin{i})
-                        plotIndentation = varargin{i};                        
+                        fillPixels = varargin{i};                        
                     end
                 case 6
                     if ~isempty(varargin{i})
                         logSteps = varargin{i};                        
+                    end
+                case 7
+                    if ~isempty(varargin{i})
+                        plotIndentation = varargin{i};                        
+                    end
+                case 8
+                    if ~isempty(varargin{i})
+                        evalPt = varargin{i};                        
+                    end
+                case 9
+                    if ~isempty(varargin{i})
+                        n_reps = varargin{i};                        
+                    end
+                case 10
+                    if ~isempty(varargin{i})
+                        maxK = varargin{i};                        
                     end
                 otherwise
                     fprintf('Passed additional parameters to fit_map() which were not used.');
@@ -48,53 +81,87 @@ if nargin > 1
 end
 
 % Permanent Settings
-errortype = 'sse';    
+errortype = 'sse';
 figX = 0;
 figY = 0;
-nTicks = 5;
 maxCol = 5;
 maxwid = get(0,'screensize');
 maxwid = maxwid(3);
 mapColorName = 'turbo';
+mapEdgeCol = 'none';
 climMax = 2e5; % Pa
 climHeight = 15e-6; % meters, the JPK Nanowizard has a 15um piezo 
 climInd = 1000e-9; % meters
-stiffMax = 10*climMax; % Pa
 trimHeight = 100e-9;
-dFreq = 200; % Hz, step size between frames
-n_frames = 100; % frames, number of frames per order of magnitude
+dFreq = 200; % Hz, step size between frames, if discrete
+n_freqs = 10; % frames, number of frames per order of magnitude
 n_datapoints = 10;
-fps = 15;
-
-% Check to see if there are subdirectories
-dirContents = dir(originalPath);
-subFolders = dirContents([dirContents.isdir]);
-subFolders(contains({subFolders.name}, {'.','..','Plots'})) = [];
 
 % If the user provides a main directory with many subdirectories containing
 % data, we should loop through all directories and analyze each in turn.
-if ~isempty(subFolders)
-    Folders = cell(1,length(subFolders));
-    Folders = cellfun(@(root,sub)[root filesep sub],{subFolders.folder},{subFolders.name},'UniformOutput',false);
-else
+if ~iscell(originalPath)
+    % Perform global clustering on one directory
     Folders = {originalPath};
+else
+    % The user has given multiple 
+    Folders = originalPath;
 end
 
 % Define error functions
 sse_global = @(data,model) sum((data-model).^2,'all');
 mse_global = @(data,model,n) sum((data-model).^2,'all')./(length(data)-n);
 
+% Clear Previous Parpool
+if ~isempty(gcp('nocreate'))
+   % Get the current pool
+    poolobj = gcp('nocreate');
+    if poolobj.NumWorkers ~= N_workers
+        delete(poolobj);
+        % Make a fresh pool
+        if N_workers == 1 
+            poolobj = [];
+            parallelSet = false;
+        elseif N_workers > 1
+            poolobj = parpool(N_workers,'IdleTimeout', 120);
+            parallelSet = true;
+        else
+            warning('Warning: you provided an invalid value for "N_workers". Using system default configuration.');
+            poolobj = parpool('IdleTimeout', 120);
+            parallelSet = true;
+        end
+    else
+        if poolobj.NumWorkers > 1
+            parallelSet = true;
+        end
+    end
+else
+    % Make a fresh pool
+    if N_workers == 1 
+        poolobj = [];
+        parallelSet = false;
+    elseif N_workers > 1
+        poolobj = parpool(N_workers,'IdleTimeout', 120);
+        parallelSet = true;
+    else
+        warning('Warning: you provided an invalid value for "N_workers". Using system default configuration.');
+        poolobj = parpool('IdleTimeout', 120);
+        parallelSet = true;
+    end
+end
+    
 % Issue wrapper which allows script to continue if there is an empty
 % directory, or other issue during processing.
 try
     
     % Begin looping through the directories or files
     for i_dir = 1:length(Folders)
+        
+        % Search recursively (using "**") for our zTransform results files
         path = Folders{i_dir};
-        Files = dir([path filesep '*Results*zTransform*.mat']);
+        Files = dir(fullfile(path, '**','*Results*zTransform*.mat'));
 
         if isempty(Files)
-            error('The directory you selected does not contain a Z-Transform QI map. Please verify your FitResults file is in that directory and the filename contains "zTransform".');
+            error('The directory you selected and its subdirectories do not contain a Z-Transform QI map. Please verify your results file is in or under that directory and the filename contains "zTransform".');
         end
 
         fileLabels = cell(numel(Files),1);
@@ -103,14 +170,117 @@ try
             idx = find(contains(lower(temp),{'fitresults','mapresults'}),1);
             fileLabels{j} = strjoin(temp([1 idx-1]),'-');
         end
+        
+        % Since we are analyzing many maps, we must create our frequency
+        % array ahead of time.
+        fprintf('\nCreating a frequency vector...');
 
+        vars = whos('-file',[Files(1).folder filesep Files(1).name]);
+        varNames = {vars.name};
+        mapsizes = NaN(numel(Files),1);
+        for j = 1:numel(varNames)
+
+            if ~contains(varNames{j},'zTransform')
+                continue;
+            end
+
+            minFreq = Inf;
+            maxFreq = 0;
+
+            for j_dir = 1:length(Files)
+
+                % Load the mat file
+                resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
+                freqMapTemp = resultsStruct.(varNames{j}).frequencyMap;
+                timesCellTemp = resultsStruct.(varNames{j}).ViscoClass.times_cell;
+                clearvars resultsStruct
+                
+                mapsizes(j_dir) = numel(freqMapTemp);
+
+                for k_pixels = 1:numel(freqMapTemp)
+                    tempf = freqMapTemp{k_pixels};
+                    tempf = tempf(tempf>0);
+                    [temp,~] = min(tempf,[],'omitnan');
+                    if any([isnan(temp),isempty(temp)]) || (numel(timesCellTemp{k_pixels})<n_datapoints)
+                        continue;
+                    end
+                    if temp < minFreq
+                        minFreq = temp;
+                    end
+                    tempf = freqMapTemp{k_pixels};
+                    tempf = tempf(tempf>0);
+                    [temp,~] = max(tempf,[],'omitnan');
+                    if isnan(temp)|| isempty(temp)
+                        continue;
+                    end
+                    if temp > maxFreq
+                        maxFreq = temp;
+                    end
+                end
+                
+            end
+
+            % Count orders of 10
+            temp = minFreq;
+            tempf = minFreq;
+            tempmax = 10^ceil(log10(minFreq));
+            magList = [];
+            if ~logSteps
+                while temp < maxFreq
+                    tempf = 10.^( ( log10(temp) ) );
+                    magList = horzcat(magList,tempf);
+                    temp = temp + dFreq;
+                end
+            else
+                while temp < maxFreq
+                    if temp == minFreq
+                        dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_freqs);
+                    end
+
+                    if temp >= tempmax
+                        tempmax = temp*10;
+                        dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_freqs);
+                    end
+
+                    tempf = 10.^( ( log10(temp) ) );
+                    magList = horzcat(magList,tempf);
+                    temp = temp + dFreq;
+                end
+            end
+            magList = unique(magList);
+            freqList = flip(magList);
+            timeList = 1./freqList;
+
+        end
+        
+        fprintf('\nPre-allocating arrays...');
+        
+        % Prepare our index records
+        ai = NaN(numel(Files),1);
+        bi = NaN(numel(Files),1);
         for j_dir = 1:length(Files)
+            if j_dir == 1
+                ai(j_dir) = 1;
+            else
+                ai(j_dir) = bi(j_dir-1) + 1;
+            end
+            bi(j_dir) = ai(j_dir) + mapsizes(j_dir) - 1;
+        end
+        clusteringDataGlobal = NaN(bi(end),numel(magList));
+        pixelLogGlobal = NaN(bi(end),2);
+        mapIDglobal = NaN(bi(end),1);
+        
+        fprintf('Complete!\n');
+        
+        % Now, loop through the files and create our dataset
+        fprintf('\nPopulating our global clustering dataset...');
+        for j_dir = 1:length(Files)
+            
             resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
-
             varNames = fields(resultsStruct);
 
             for j = 1:numel(varNames)
-
+                
                 if ~contains(varNames{j},'zTransform')
                     continue;
                 end
@@ -128,93 +298,16 @@ try
                 ydata = flip(1:mapSize(2));
                 [X, Y] = meshgrid(xdata,ydata);
 
-                minFreq = Inf;
-                maxFreq = 0;
-                for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
-                    tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
-                    tempf = tempf(tempf>0);
-                    [temp,~] = min(tempf,[],'omitnan');
-                    if any([isnan(temp),isempty(temp)]) || (numel(resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels})<n_datapoints)
-                        continue;
-                    end
-                    if temp < minFreq
-                        minFreq = temp;
-                    end
-                    tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
-                    tempf = tempf(tempf>0);
-                    [temp,~] = max(tempf,[],'omitnan');
-                    if isnan(temp)|| isempty(temp)
-                        continue;
-                    end
-                    if temp > maxFreq
-                        maxFreq = temp;
-                    end
-                end
-
-                % Count orders of 10
-                temp = minFreq;
-                tempf = minFreq;
-                tempmax = 10^ceil(log10(minFreq));
-                magList = [];
-                if ~logSteps
-                    while temp < maxFreq
-                        tempf = 10.^( ( log10(temp) ) );
-                        magList = horzcat(magList,tempf);
-                        temp = temp + dFreq;
-                    end
-                else
-                    while temp < maxFreq
-                        if temp == minFreq
-                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_frames);
-                        end
-
-                        if temp >= tempmax
-                            tempmax = temp*10;
-                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_frames);
-                        end
-
-                        tempf = 10.^( ( log10(temp) ) );
-                        magList = horzcat(magList,tempf);
-                        temp = temp + dFreq;
-                    end
-                end
-                magList = unique(magList);
-                freqList = flip(magList);
-
                 if isfield(resultsStruct.(varNames{j}),'bestParams')
                     plotModel = true;
                 else
                     plotModel = false;
                 end
 
-                n_plots = 4+plotModel+plotIndentation;
-                n_rows = ceil(n_plots/maxCol);
-                n_cols = min([n_plots maxCol]);              
-                mult = min([400 maxwid/n_cols]);
-                figWid = mult*n_cols;
-                figHeight = max([mult*n_rows figWid/n_plots]);
-
-                if plotModel
-                    mapType = '-Model';
-                else
-                    mapType = '-Raw';
-                end
-
-                M = struct('cdata', cell(1,numel(freqList)), ...
-                    'colormap', cell(1,numel(freqList)));
-
-                gifFile = [path filesep fileLabels{j_dir} '-MapAnimation-' varNames{j}...
-                    mapType '.gif'];
-%                 movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
-%                     mapType '.mp4'];
-
-                % Can't render mp4 on linux cluster
-                movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
-                    mapType '.avi'];
-
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 if correctTilt
-                    pixelHeightArray = cell2mat(fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate));
+                    temp = fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate,[],optimizeFlattening);
+                    pixelHeightArray = cell2mat(temp);
                 else
                     pixelHeightArray = cell2mat(pixelHeight_cell);
                 end
@@ -227,246 +320,159 @@ try
                 pixelSkip = 1:numel(pixelHeightArray);
                 pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
 
-                for k_freq = 1:numel(freqList)
+                % Position for the map
+                xc = 1;
+                yc = 0;
 
-                    % Prep the movie
-                    % Clear old figures if they exist
-                    if ~exist('mapPlotWindow','var')
-                        mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-                    else
-                        try
-                            figure(mapPlotWindow)
-                            clf
-                        catch
-                            mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-                        end
-                    end
+                if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                    % Do some prep to shorten the computation time and
+                    % limit the number of calls to "zTransformCurve",
+                    % which is slow.
+                    F_hz_all = cell(size([pixelHeight_cell{:}]));
+                    h_hz_all = cell(size([pixelHeight_cell{:}]));
 
-                    % Original, using uicontrols
-%                     u = uicontrol(mapPlotWindow,'Style','slider');
-%                     u.Position = [20 15 figWid-230 20];
-%                     u.Max = max(freqList);
-%                     u.Min = min(freqList);
-%                     u.Value = freqList(1);
-%                     u2 = uicontrol(mapPlotWindow,'Style','edit');
-%                     u2.Position = [figWid-175 10 150 40];
-%                     u2.String = [num2str(round(freqList(1))) ' Hz'];
-%                     u2.FontSize = 16;
-
-                    % Method 2, using annotation
-                    pos = [figWid-175 10 150 25];
-                    str = [num2str(round(freqList(k_freq))) ' Hz'];
-                    annotation('textbox',...
-                        'Units','pixels',...
-                        'Position',pos,...
-                        'String',str,...
-                        'FitBoxToText','on',...
-                        'BackgroundColor','white',...
-                        'HorizontalAlignment','center',...
-                        'VerticalAlignment','middle',...
-                        'FontSize',16);
-
-                    % Make blank map data
-                    mapDataStorage = NaN(flip(mapSize));
-                    mapDataLoss = NaN(flip(mapSize));
-                    mapDataAngle = NaN(flip(mapSize));
-                    mapDataRelaxance = NaN(flip(mapSize));
-                    mapDataError = NaN(flip(mapSize));
-                    mapDataTerms = NaN(flip(mapSize));
-                    mapDataHeight = NaN(flip(mapSize));
-                    mapDataInd = NaN(flip(mapSize));
-                    heightImg = zeros(flip(mapSize));
-
-                    % Position for the map
-                    xc = 1;
-                    yc = 0;
-
-                    if ~isfield(resultsStruct.(varNames{j}),'indMap')
-                        % Do some prep to shorten the computation time and
-                        % limit the number of calls to "zTransformCurve",
-                        % which is slow.
-                        F_hz_all = cell(size([pixelHeight_cell{:}]));
-                        h_hz_all = cell(size([pixelHeight_cell{:}]));
-
-                        for i_z = 1:numel(F_hz_all)
-
-                            if hideSubstrate && any(ismember(k_pixels,pixelSkip))
-                                F_hz_all{i_z} = NaN;
-                                h_hz_all{i_z} = NaN;
-                                continue;
-                            end
-
-                            dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{i_z},...
-                                resultsStruct.(varNames{j}).ViscoClass.dts_cell{i_z},...
-                                resultsStruct.(varNames{j}).ViscoClass.forces_cell{i_z},...
-                                resultsStruct.(varNames{j}).ViscoClass.indentations_cell{i_z},...
-                                resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{i_z},...
-                                resultsStruct.(varNames{j}).ViscoClass.nu_cell{i_z},...
-                                resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
-                                resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
-                                resultsStruct.(varNames{j}).ViscoClass.thinSample,...
-                                resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{i_z}};
-
-                            if any(cellfun(@isempty,dataIn(1:6))) || any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
-                                F_hz_all{i_z} = NaN;
-                                h_hz_all{i_z} = NaN;
-                                continue;
-                            end
-
-                            [~,~,F_hz_all{i_z},~,h_hz_all{i_z},~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
-
-                        end
-
-                    end
-
-                    heightImg = reshape(pixelHeightArray,mapSize);
-
-                    for k_pixels = 1:numel(mapDataStorage)
-
-                        % Get the current pixel position
-                        if xc > mapSize(1)
-                            xc = 1;
-                            yc = yc + 1;
-                        end
-                        idx_pixel = sub2ind(flip(mapSize),mapSize(2)-yc,xc);
-
-                        if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
-                            xc = xc + 1;
-                            continue;
-                        end
+                    for i_z = 1:numel(F_hz_all)
 
                         if hideSubstrate && any(ismember(k_pixels,pixelSkip))
-                            xc = xc + 1;
+                            F_hz_all{i_z} = NaN;
+                            h_hz_all{i_z} = NaN;
                             continue;
                         end
 
-                        if ~isfield(resultsStruct.(varNames{j}),'indMap')
-                            F_hz = abs(F_hz_all{k_pixels});
-                            h_hz = abs(h_hz_all{k_pixels});
-                        else
-                            F_hz = abs(resultsStruct.(varNames{j}).forceMap{k_pixels});
-                            h_hz = abs(resultsStruct.(varNames{j}).indMap{k_pixels});
+                        dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.dts_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.forces_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.indentations_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.nu_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                            resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                            resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                            resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{i_z}};
+
+                        if any(cellfun(@isempty,dataIn(1:6))) || any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                            F_hz_all{i_z} = NaN;
+                            h_hz_all{i_z} = NaN;
+                            continue;
                         end
 
-                        % Load and perform peak correction
-                        freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
-                        [~,maxid] = max(F_hz);
-                        freqAdj = freq(maxid);
-                        freq = freq - freqAdj;
+                        [~,~,F_hz_all{i_z},~,h_hz_all{i_z},~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
 
-                        if plotModel
+                    end
 
-                            harmonicSettings = struct;
-                            harmonicSettings.elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
-                            harmonicSettings.fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
-                            harmonicSettings.model = resultsStruct.(varNames{j}).model;
+                end
+                
+                clusteringData = NaN(numel(pixelHeightArray),numel(magList));
+                pixelLog = NaN(numel(pixelHeightArray),2);
 
-                            % Create a frequency array
-                            visco = resultsStruct.(varNames{j}).ViscoClass;
-                            elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
-                            fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
+                for k_pixels = 1:numel(pixelHeightArray)
 
-                            % Generate a frequency array in log scale
-                            omega = 2.*pi.*freq;
+                    % Get the current pixel position
+                    if xc > mapSize(1)
+                        xc = 1;
+                        yc = yc + 1;
+                    end
+                    idx_pixel = sub2ind(flip(mapSize),mapSize(2)-yc,xc);
+                    pixelLog(k_pixels,:) = [mapSize(2)-yc,xc];
+                    
+                    if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                        xc = xc + 1;
+                        continue;
+                    end
 
-                            % Find the best number of terms for this pixel
-                            paramErrors = Inf(numel(resultsStruct.(varNames{j}).bestParams),1);
-                            for k = 1:numel(resultsStruct.(varNames{j}).bestParams)
+                    if hideSubstrate && any(ismember(k_pixels,pixelSkip))
+                        xc = xc + 1;
+                        continue;
+                    end
 
-                                % Calculate the error for those parameters
-                                switch lower(resultsStruct.(varNames{j}).model)
-                                    case 'maxwell'
-                                        % Grab the parameters
-                                        tempParams = resultsStruct.(varNames{j}).bestParams{k}{k_pixels};
-                                        switch errortype
-                                            case 'sse'
-                                                paramErrors(k) = sse_global(visco.forces_cell{k_pixels},...
-                                                    LR_Maxwell(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
-                                            case 'mse'
-                                                paramErrors(k) = mse_global(visco.forces_cell{k_pixels},...
-                                                    LR_Maxwell(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
-                                                        numel(tempParams)*length(visco.tipSize_cell{k_pixels}));
-                                        end
+                    if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                        dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                            resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                            resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                            resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
 
-                                    case 'voigt'
-                                        % Grab the parameters
-                                        tempParams = resultsStruct.(varNames{j}).bestParams{k}{k_pixels};
-                                        switch errortype
-                                            case 'sse'
-                                                paramErrors(k) = sse_global(visco.indentations_cell{k_pixels},...
-                                                    LR_Voigt(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
-                                            case 'mse'
-                                                paramErrors(k) = mse_global(visco.indentations_cell{k_pixels},...
-                                                    LR_Voigt(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
-                                                        numel(tempParams)*length(visco.tipSize_cell{k_pixels}));
-                                        end
+                        [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
+                        F_hz = abs(F_hz);
+                        h_hz = abs(h_hz);
+                    else
+                        F_hz = abs(resultsStruct.(varNames{j}).forceMap{k_pixels});
+                        h_hz = abs(resultsStruct.(varNames{j}).indMap{k_pixels});
+                    end
 
-                                    case 'plr'
-                                        switch errortype
-                                            case 'sse'
-                                                paramErrors(k) = sse_global(visco.indentations_cell{k_pixels},...
-                                                    LR_PLR(resultsStruct.(varNames{j}).bestParams{2}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
-                                            case 'mse'
-                                                paramErrors(k) = mse_global(visco.indentations_cell{k_pixels},...
-                                                    LR_PLR(resultsStruct.(varNames{j}).bestParams{1}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
-                                                        numel(resultsStruct.(varNames{j}).bestParams{1}{k_pixels})*length(visco.tipSize_cell{k_pixels}));
-                                        end
+                    % Load and perform peak correction
+                    freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    [~,maxid] = max(F_hz);
+                    freqAdj = freq(maxid);
+                    freq = freq - freqAdj;
 
-                                    otherwise
-                                        error('The model in your results structure was not recognized.')
-                                end
+                    % Resample to known array of frequencies
+                    ids = ((freq >= min(magList)) & (freq <= max(magList)));
 
-                            end
+                    if sum(ids,'all') < 2
+                        xc = xc + 1;
+                        continue;
+                    end
 
-                            % Determine the best number of arms for this pixel
-                            [~,idx] = min(paramErrors);
-                            bestidx = idx;
-                            for k = 1:length(paramErrors)
-                                if k == idx
-                                    continue;
-                                end
-                                if 100*(paramErrors(idx)-paramErrors(k))/paramErrors(idx) < 1
-                                    bestidx = k;                                
-                                end
-                            end
+                    if plotModel
 
-                            harmonicSettings.bestParams = resultsStruct.(varNames{j}).bestParams{bestidx}{k_pixels};
+                        harmonicSettings = struct;
+                        harmonicSettings.elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
+                        harmonicSettings.fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
+                        harmonicSettings.model = resultsStruct.(varNames{j}).model;
 
+                        % Create a frequency array
+                        visco = resultsStruct.(varNames{j}).ViscoClass;
+                        elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
+                        fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
+
+                        % Generate a frequency array in log scale
+                        omega = 2.*pi.*freq;
+
+                        % Find the best number of terms for this pixel
+                        paramErrors = Inf(numel(resultsStruct.(varNames{j}).bestParams),1);
+                        for k = 1:numel(resultsStruct.(varNames{j}).bestParams)
+
+                            % Calculate the error for those parameters
                             switch lower(resultsStruct.(varNames{j}).model)
                                 case 'maxwell'
-                                    [modelStorage,modelLoss,modelAngle] = visco.harmonics_Maxwell(omega,harmonicSettings);
+                                    % Grab the parameters
+                                    tempParams = resultsStruct.(varNames{j}).bestParams{k}{k_pixels};
                                     switch errortype
                                         case 'sse'
-                                            modelErrorTime = sse_global(visco.forces_cell{k_pixels},...
-                                                LR_Maxwell(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                            paramErrors(k) = sse_global(visco.forces_cell{k_pixels},...
+                                                LR_Maxwell(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
                                         case 'mse'
-                                            modelErrorTime = mse_global(visco.forces_cell{k_pixels},...
-                                                LR_Maxwell(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
-                                                    numel(harmonicSettings.bestParams)*length(visco.tipSize_cell{k_pixels}));
+                                            paramErrors(k) = mse_global(visco.forces_cell{k_pixels},...
+                                                LR_Maxwell(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                    numel(tempParams)*length(visco.tipSize_cell{k_pixels}));
                                     end
 
                                 case 'voigt'
-                                    [modelStorage,modelLoss,modelAngle] = visco.harmonics_Voigt(omega,harmonicSettings);
+                                    % Grab the parameters
+                                    tempParams = resultsStruct.(varNames{j}).bestParams{k}{k_pixels};
                                     switch errortype
                                         case 'sse'
-                                            modelErrorTime = sse_global(visco.indentations_cell{k_pixels},...
-                                                LR_Voigt(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                            paramErrors(k) = sse_global(visco.indentations_cell{k_pixels},...
+                                                LR_Voigt(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
                                         case 'mse'
-                                            modelErrorTime = mse_global(visco.indentations_cell{k_pixels},...
-                                                LR_Voigt(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
-                                                    numel(harmonicSettings.bestParams)*length(visco.tipSize_cell{k_pixels}));
+                                            paramErrors(k) = mse_global(visco.indentations_cell{k_pixels},...
+                                                LR_Voigt(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                    numel(tempParams)*length(visco.tipSize_cell{k_pixels}));
                                     end
 
                                 case 'plr'
-                                    harmonicSettings.dt = dt;
-                                    harmonicSettings.nu_sample = mode(cell2mat(cellfun(@(x)mode(round(x,4,'significant')),nu,'UniformOutput',false)));
-                                    [modelStorage,modelLoss,modelAngle] = visco.harmonics_PLR(omega,harmonicSettings);
                                     switch errortype
                                         case 'sse'
-                                            modelErrorTime = sse_global(visco.indentations_cell{k_pixels},...
+                                            paramErrors(k) = sse_global(visco.indentations_cell{k_pixels},...
                                                 LR_PLR(resultsStruct.(varNames{j}).bestParams{2}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
                                         case 'mse'
-                                            modelErrorTime = mse_global(visco.indentations_cell{k_pixels},...
+                                            paramErrors(k) = mse_global(visco.indentations_cell{k_pixels},...
                                                 LR_PLR(resultsStruct.(varNames{j}).bestParams{1}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
                                                     numel(resultsStruct.(varNames{j}).bestParams{1}{k_pixels})*length(visco.tipSize_cell{k_pixels}));
                                     end
@@ -475,346 +481,891 @@ try
                                     error('The model in your results structure was not recognized.')
                             end
 
-                            modelRelaxance = modelStorage + 1j*modelLoss;
+                        end
 
-                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq) < 2
-                                mapDataStorage(idx_pixel) = NaN;
-                                mapDataLoss(idx_pixel) = NaN;
-                                mapDataAngle(idx_pixel) = NaN;
-                                mapDataRelaxance(idx_pixel) = NaN;
-                                mapDataError(idx_pixel) = NaN;
-                                mapDataTerms(idx_pixel) = NaN;
-                                mapDataHeight(idx_pixel) = NaN;
-                                mapDataInd(idx_pixel) = NaN;
-                                xc = xc + 1;
-                            else
-                                % Resample to known array of frequencies
-                                if hideSubstrate && (max([interp1(freq,modelStorage,freqList(k_freq),'makima',...
-                                    NaN) interp1(freq,modelLoss,freqList(k_freq),'makima',...
-                                    NaN) 0],[],'omitnan') > stiffMax)
+                        % Determine the best number of arms for this pixel
+                        [~,idx] = min(paramErrors);
+                        bestidx = idx;
+                        for k = 1:length(paramErrors)
+                            if k == idx
+                                continue;
+                            end
+                            if 100*(paramErrors(idx)-paramErrors(k))/paramErrors(idx) < 1
+                                bestidx = k;                                
+                            end
+                        end
 
-                                    xc = xc + 1;
-                                    continue;
+                        harmonicSettings.bestParams = resultsStruct.(varNames{j}).bestParams{bestidx}{k_pixels};
+
+                        switch lower(resultsStruct.(varNames{j}).model)
+                            case 'maxwell'
+                                [modelStorage,modelLoss,modelAngle] = visco.harmonics_Maxwell(omega,harmonicSettings);
+                                switch errortype
+                                    case 'sse'
+                                        modelErrorTime = sse_global(visco.forces_cell{k_pixels},...
+                                            LR_Maxwell(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                    case 'mse'
+                                        modelErrorTime = mse_global(visco.forces_cell{k_pixels},...
+                                            LR_Maxwell(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                numel(harmonicSettings.bestParams)*length(visco.tipSize_cell{k_pixels}));
                                 end
 
-                                mapDataStorage(idx_pixel) = interp1(freq,modelStorage,freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataLoss(idx_pixel) = interp1(freq,modelLoss,freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataAngle(idx_pixel) = interp1(freq,modelAngle,freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
-                                    NaN);
-
-                                % Has to be from the time domain
-                                % (normalization issues)
-                                evalPt = 1./(freqList(k_freq));
-                                t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
-                                h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-                                mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
-                                    1e-12);
-
-                                mapDataError(idx_pixel) = modelErrorTime;
-                                mapDataTerms(idx_pixel) = bestidx;
-                                mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
-                                xc = xc + 1;
-                            end
-
-                        else
-
-                            % We are just plotting the data captured
-                            % DIRECTLY from the z-transform method.
-                            modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
-                            modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
-                            modelAngle = atand(modelLoss./modelStorage);
-
-                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq((freq >= min(freqList)) & (freq <= max(freqList)))) < 2
-                                mapDataStorage(idx_pixel) = NaN;
-                                mapDataLoss(idx_pixel) = NaN;
-                                mapDataAngle(idx_pixel) = NaN;
-                                mapDataHeight(idx_pixel) = NaN;
-                                mapDataInd(idx_pixel) = NaN;
-                                xc = xc + 1;
-                            else
-
-    %                                 [~,idx] = min(abs(freq-freqList(k_freq)));                                
-                                % Resample to known array of frequencies
-                                ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
-
-                                if hideSubstrate && (max([interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
-                                    NaN) interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
-                                    NaN) 0],[],'omitnan') > stiffMax)
-
-                                    xc = xc + 1;
-                                    continue;
+                            case 'voigt'
+                                [modelStorage,modelLoss,modelAngle] = visco.harmonics_Voigt(omega,harmonicSettings);
+                                switch errortype
+                                    case 'sse'
+                                        modelErrorTime = sse_global(visco.indentations_cell{k_pixels},...
+                                            LR_Voigt(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                    case 'mse'
+                                        modelErrorTime = mse_global(visco.indentations_cell{k_pixels},...
+                                            LR_Voigt(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                numel(harmonicSettings.bestParams)*length(visco.tipSize_cell{k_pixels}));
                                 end
 
-                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
-                                    NaN);
+                            case 'plr'
+                                harmonicSettings.dt = dt;
+                                harmonicSettings.nu_sample = mode(cell2mat(cellfun(@(x)mode(round(x,4,'significant')),nu,'UniformOutput',false)));
+                                [modelStorage,modelLoss,modelAngle] = visco.harmonics_PLR(omega,harmonicSettings);
+                                switch errortype
+                                    case 'sse'
+                                        modelErrorTime = sse_global(visco.indentations_cell{k_pixels},...
+                                            LR_PLR(resultsStruct.(varNames{j}).bestParams{2}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                    case 'mse'
+                                        modelErrorTime = mse_global(visco.indentations_cell{k_pixels},...
+                                            LR_PLR(resultsStruct.(varNames{j}).bestParams{1}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                numel(resultsStruct.(varNames{j}).bestParams{1}{k_pixels})*length(visco.tipSize_cell{k_pixels}));
+                                end
 
-                                % Has to be from the time domain
-                                % (normalization issues)
-                                evalPt = 1./(freqList(k_freq));
-                                t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
-                                h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-                                mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
-                                    1e-12);
-
-                                mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
-                                xc = xc + 1;
-                            end
-
+                            otherwise
+                                error('The model in your results structure was not recognized.')
                         end
 
-                    end
+                        modelRelaxance = modelStorage + 1j*modelLoss;
 
-                    if fillPixels
-                        % Perform Interpolation of non-viable pixels
-                        % Start by creating masks for the pixels to fill
-                        [m, n] = size(mapDataHeight);
-                        neighbors4 = [-1, 1, m, -m];
-                        neighbors8 = [neighbors4, -m-1, -m+1, m-1, m+1];
-                        f4 = @(padimg,ind) mean(padimg(ind + neighbors4),"omitnan");
-                        f8 = @(padimg,ind) mean(padimg(ind + neighbors8),"omitnan");
+                        % Has to be from the time domain
+                        % (normalization issues)
+                        t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
+                        h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
+                        F_t = resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels};
 
-                        storageTemp = mapDataStorage;
-                        storageTemp(pixelSkip) = 0;
-                        paddedStorage = padarray(storageTemp, [1 1], 0, 'both');
-
-                        lossTemp = mapDataLoss;
-                        lossTemp(pixelSkip) = 0;
-                        paddedLoss = padarray(lossTemp, [1 1], 0, 'both');
-
-                        angleTemp = mapDataAngle;
-                        angleTemp(pixelSkip) = 0;
-                        paddedAngle = padarray(angleTemp, [1 1], 0, 'both');
-
-                        % Storage Modulus Interpolation
-                        originalNaNPos = find(isnan(storageTemp));
-                        paddedImageNaNs = find(isnan(paddedStorage));
-                        imglocav = storageTemp;
-
-                        while nnz(isnan(imglocav)) > 0
-                            originalNaNPos = find(isnan(imglocav));
-                            for ii = 1:numel(originalNaNPos)
-                                imglocav(originalNaNPos(ii)) = f8(paddedStorage,paddedImageNaNs(ii));
-                            end
-                        end
-
-                        mapDataStorage(originalNaNPos) = imglocav(originalNaNPos);
-
-                        % Loss Modulus Interpolation
-                        originalNaNPos = find(isnan(lossTemp));
-                        paddedImageNaNs = find(isnan(paddedLoss));
-                        imglocav = lossTemp;
-
-                        while nnz(isnan(imglocav)) > 0
-                            originalNaNPos = find(isnan(imglocav));
-                            for ii = 1:numel(originalNaNPos)
-                                imglocav(originalNaNPos(ii)) = f8(paddedLoss,paddedImageNaNs(ii));
-                            end
-                        end
-
-                        mapDataLoss(originalNaNPos) = imglocav(originalNaNPos);
-
-                        % Loss Angle Interpolation
-                        originalNaNPos = find(isnan(angleTemp));
-                        paddedImageNaNs = find(isnan(paddedAngle));
-                        imglocav = angleTemp;
-
-                        while nnz(isnan(imglocav)) > 0
-                            originalNaNPos = find(isnan(imglocav));
-                            for ii = 1:numel(originalNaNPos)
-                                imglocav(originalNaNPos(ii)) = f8(paddedAngle,paddedImageNaNs(ii));
-                            end
-                        end
-
-                        mapDataAngle(originalNaNPos) = imglocav(originalNaNPos);
-
-                    end
-
-                    mapDataStorage(mapDataStorage == 0) = NaN;
-                    mapDataLoss(mapDataLoss == 0) = NaN;
-                    mapDataAngle(mapDataAngle == 0) = NaN;
-                    mapDataInd(mapDataInd == 0) = NaN;
-
-                    tiledlayout(n_rows,n_cols, 'padding', 'none', ...
-                        'TileSpacing', 'compact', ...
-                        'OuterPosition', [0 0.15 1 0.85])
-
-                    ax = nexttile;
-
-                    surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
-                    colormap(ax,'turbo')
-                    hold on
-                    title('Topography')
-                    ylabel('Y Index')
-                    xlabel('X Index')
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
-                    cb = colorbar;
-                    caxis([0 climHeight]); % Absolute scale
-                    temp = (cb.Ticks' ./ 1e-6);
-                    for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
-                    end
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    if plotIndentation
-
-                        ax = nexttile;
-
-                        surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor','interp')
-                        colormap(ax,'turbo')
-                        hold on
-                        title('Indentation')
-                        ylabel('Y Index')
-                        xlabel('X Index')
-                        xlim([1 max(mapSize)])
-                        ylim([1 max(mapSize)])
-                        cb = colorbar;
-                        caxis([0 climInd]); % Absolute scale
-                        temp = (cb.Ticks' ./ 1e-9);
-                        for ii = 1:numel(temp)
-                           cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
-                        end
-                        view(2)
-                        pbaspect([1 1 1])
-                        hold off
-
-                    end
-
-                    ax = nexttile;
-
-                    surf(X,Y,mapDataHeight,mapDataStorage,'EdgeColor','interp')
-                    colormap(ax,mapColorName)
-                    hold on
-                    title('Storage Modulus')
-                    ylabel('Y Index')
-                    xlabel('X Index')
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
-                    cb = colorbar;
-                    caxis([0 climMax]);
-                    temp = (cb.Ticks' .* 1e-3);
-                    for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-                    end
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    ax = nexttile;
-
-                    surf(X,Y,mapDataHeight,mapDataLoss,'EdgeColor','interp')
-                    colormap(ax,mapColorName)
-                    hold on
-                    title('Loss Modulus')
-                    xlabel('X Index')
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
-                    cb = colorbar;
-                    caxis([0 climMax]);
-                    temp = (cb.Ticks' .* 1e-3);
-                    for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-                    end
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    ax = nexttile;
-
-                    surf(X,Y,mapDataHeight,mapDataAngle,'EdgeColor','interp')
-                    colormap(ax,mapColorName)
-                    hold on
-                    title('Loss Angle')
-                    xlabel('X Index')
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
-                    cb = colorbar;
-                    cb.Ruler.TickLabelFormat='%g Deg';
-                    caxis([0 90]);
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    if plotModel
-                        ax = nexttile;
-
-                        surf(X,Y,mapDataHeight,mapDataTerms)
-                        colormap(ax,mapColorName)
-                        colormap(gca,'parula')
-                        hold on
-                        xlim([1 max(mapSize)])
-                        ylim([1 max(mapSize)])
-                        title(sprintf('Number of Terms'))
-                        xlabel('X Index')
-                        cb = colorbar;
-                        set(cb,'YTick',1:numel(resultsStruct.(varNames{j}).bestParams))
-                        view(2)
-                        pbaspect([1 1 1])
-                        hold off
-                    end
-
-                    % Save Animation
-%                     u.Value = freqList(k_freq);
-%                     u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
-                    drawnow
-
-                    % method 1 using getframe
-%                     M(k_freq) = getframe(mapPlotWindow);
-
-                    % method 2 using print
-                    cdata = print('-RGBImage','-r120');
-                    M(k_freq) = im2frame(cdata);
-
-                end
-
-                % Make gif
-                for i_mov = 1:numel(M)
-                    frame = M(i_mov);
-                    im = frame2im(frame);
-                    [imind,cm] = rgb2ind(im,256);
-                    if i_mov == 1
-                        imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'Loopcount',inf);
                     else
-                        imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'WriteMode','append');
+
+                        % We are just plotting the data captured
+                        % DIRECTLY from the z-transform method.
+                        modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
+                        modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
+                        modelAngle = atand(modelLoss./modelStorage);
+                        modelRelaxance = abs(resultsStruct.(varNames{j}).relaxanceMap{k_pixels});
+
+                        % Has to be from the time domain
+                        % (normalization issues)
+                        t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
+                        h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
+                        F_t = resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels};
+                            
                     end
+                    
+                    clusterInterp = [];
+
+                    switch clusterTarget
+                        case 'force'
+                            xinterp = t_t;
+                            obsList = timeList;
+                            clusterInterp = F_t;
+                        case 'indentation'
+                            xinterp = t_t;
+                            obsList = timeList;
+                            clusterInterp = h_t;
+                        case 'storage'
+                            xinterp = freq;
+                            obsList = magList;
+                            clusterInterp = modelStorage;
+                        case 'loss'
+                            xinterp = freq;
+                            obsList = magList;
+                            clusterInterp = modelLoss;
+                        case 'angle'
+                            xinterp = freq;
+                            obsList = magList;
+                            clusterInterp = modelAngle;
+                        case 'relaxance'
+                            xinterp = freq;
+                            obsList = magList;
+                            clusterInterp = modelRelaxance;
+                    end
+
+                    try
+                        % Resample to known array of frequencies
+                        obsOut = interp1(xinterp,clusterInterp,obsList,'makima',...
+                            NaN);
+                        clusteringData(k_pixels,:) = obsOut;
+                    catch
+                        % Do nothing
+                    end
+                    
+                    xc = xc + 1;
+
                 end
-
-                % Write to mp4
-%                 v = VideoWriter(movieFile,'MPEG-4');
-%                 v.Quality = 100;
-%                 v.FrameRate = fps;
-
-                % Can't render mp4 on linux cluster
-                v = VideoWriter(movieFile,'Motion JPEG AVI');
-                v.FrameRate = fps;
-                open(v);
-                writeVideo(v,M);
-                close(v);
+                
+                if fillPixels
+                    % Perform Interpolation of non-viable pixels
+                    % (nothing for now, design something to average the
+                    % time series if possible
+                    
+                end
+                
+                % Concatenate our Clustering Data from this map and save
+                % the indices for this particular file
+                pixelLogGlobal(ai(j_dir):bi(j_dir),:) = pixelLog;
+                mapIDglobal(ai(j_dir):bi(j_dir)) = j_dir;
+                clusteringDataGlobal(ai(j_dir):bi(j_dir),:) = clusteringData;
 
             end
+            
+            clearvars resultsStruct mapSize
 
         end
+        
+        fprintf('Complete!\n');
+        
+        fprintf('\nClustering the global dataset...');
 
+        % Perform some data cleaning. Columns where we don't have enough
+        % observations compared to bins are a PROBLEM. We have to remove
+        % these before analyzing.
+        dataVerify = ~isnan(clusteringDataGlobal);
+        goodCols = sum(dataVerify,1);
+        idRem = goodCols < maxK;
+        
+        magList(idRem) = [];
+        freqList(idRem) = [];
+        timeList(idRem) = [];
+        clusteringDataGlobal(:,idRem) = [];
+        
+        % Perform the clustering
+        opts = statset('UseParallel',parallelSet,...
+            'MaxIter',1e2,...
+            'Display','off');
+        tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
+            'Distance',@dtwf,...
+            'Replicates',n_reps,...
+            'Algorithm','large');
+        ids = all(isnan(clusteringDataGlobal),2); % Find excluded pixels
+        clusteringDataGlobal(ids,:) = [];
+        pixelLogGlobal(ids,:) = [];
+        mapIDglobal(ids) = [];
+
+        % Try all of the cluster configurations. We start with 3
+        % clusters to account for any substrate pixels that were
+        % not trimmed. This is not ideal, but unavoidable with
+        % automatic large-scale analysis.
+        eva = evalclusters(clusteringDataGlobal,tempfunc,'CalinskiHarabasz',...
+            'klist',((3-hideSubstrate):maxK));
+
+        fprintf('\nOptimal Number of Bins: %d\n\n',eva.OptimalK);
+
+        idxK = tempfunc(clusteringDataGlobal,eva.OptimalK);
+        
+        fprintf('Complete!\n');
+        
+        % Now, go through and save the results to each output file and make
+        % our plots!
+        fprintf('\nGenerating our output plots/files...');
+        for j_dir = 1:length(Files)
+            
+            resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
+            varNames = fields(resultsStruct);
+
+            for j = 1:numel(varNames)
+                
+                if ~contains(varNames{j},'zTransform')
+                    continue;
+                end
+
+                if isfield(resultsStruct.(varNames{j}),'mapSize')
+                    mapSize = resultsStruct.(varNames{j}).mapSize;
+                else
+                    mapSize = [128 128];
+                end
+
+                pixelHeight_cell = resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell;
+
+                % axes meshgrid for scattering data
+                xdata = 1:mapSize(1);
+                ydata = flip(1:mapSize(2));
+                [X, Y] = meshgrid(xdata,ydata);
+
+                if isfield(resultsStruct.(varNames{j}),'bestParams')
+                    plotModel = true;
+                else
+                    plotModel = false;
+                end
+
+                n_plots = 3+plotIndentation;
+                n_rows = ceil(n_plots/maxCol);
+                n_cols = min([n_plots maxCol]);              
+                mult = min([400 maxwid/n_cols]);
+                figWid = mult*n_cols;
+                figHeight = max([mult*n_rows figWid/n_plots]);
+                
+                % Clear old figures if they exist
+                if ~exist('mapPlotWindow','var')
+                    mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+                else
+                    try
+                        figure(mapPlotWindow)
+                        clf
+                    catch
+                        mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+                    end
+                end
+
+                if plotModel
+                    mapType = '-Model';
+                else
+                    mapType = '-ZTrans';
+                end
+
+                switch clusterTarget
+                    case 'force'
+                        saveLabel = '-Force';
+                    case 'indentation'
+                        saveLabel = '-Ind';
+                    case 'storage'
+                        saveLabel = '-StorageMod';
+                    case 'loss'
+                        saveLabel = '-LossMod';
+                    case 'angle'
+                        saveLabel = '-LossAng';
+                    case 'relaxance'
+                        saveLabel = '-Relaxance';
+                end
+                
+                plotFile = [path filesep fileLabels{j_dir} saveLabel 'ClusteringGlobal-' varNames{j}...
+                    mapType];
+
+                pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
+                if correctTilt
+                    temp = fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate,[],optimizeFlattening);
+                    pixelHeightArray = cell2mat(temp);
+                else
+                    pixelHeightArray = cell2mat(pixelHeight_cell);
+                end
+
+                [minHeight,~] = min(pixelHeightArray);
+                substrateCutoff = minHeight + trimHeight;
+                pixelsToRemove = false(size(pixelHeightArray));
+                pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
+
+                pixelSkip = 1:numel(pixelHeightArray);
+                pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
+                
+%                 % Add frequency annotation
+%                 pos = [figWid-175 10 150 25];
+%                 str = [num2str(round(evalPt)) ' Hz'];
+%                 annotation('textbox',...
+%                     'Units','pixels',...
+%                     'Position',pos,...
+%                     'String',str,...
+%                     'FitBoxToText','on',...
+%                     'BackgroundColor','white',...
+%                     'HorizontalAlignment','center',...
+%                     'VerticalAlignment','middle',...
+%                     'FontSize',16);
+
+                % Make blank map data
+                mapDataStorage = NaN(flip(mapSize));
+                mapDataLoss = NaN(flip(mapSize));
+                mapDataAngle = NaN(flip(mapSize));
+                mapDataRelaxance = NaN(flip(mapSize));
+                mapDataError = NaN(flip(mapSize));
+                mapDataTerms = NaN(flip(mapSize));
+                mapDataHeight = NaN(flip(mapSize));
+                mapDataInd = NaN(flip(mapSize));
+                mapDataForce = NaN(flip(mapSize));
+                heightImg = zeros(flip(mapSize));
+
+                % Position for the map
+                xc = 1;
+                yc = 0;
+
+                if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                    % Do some prep to shorten the computation time and
+                    % limit the number of calls to "zTransformCurve",
+                    % which is slow.
+                    F_hz_all = cell(size([pixelHeight_cell{:}]));
+                    h_hz_all = cell(size([pixelHeight_cell{:}]));
+
+                    for i_z = 1:numel(F_hz_all)
+
+                        if hideSubstrate && any(ismember(k_pixels,pixelSkip))
+                            F_hz_all{i_z} = NaN;
+                            h_hz_all{i_z} = NaN;
+                            continue;
+                        end
+
+                        dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.dts_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.forces_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.indentations_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.nu_cell{i_z},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                            resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                            resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                            resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{i_z}};
+
+                        if any(cellfun(@isempty,dataIn(1:6))) || any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                            F_hz_all{i_z} = NaN;
+                            h_hz_all{i_z} = NaN;
+                            continue;
+                        end
+
+                        [~,~,F_hz_all{i_z},~,h_hz_all{i_z},~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
+
+                    end
+
+                end
+                
+                heightImg = reshape(pixelHeightArray,mapSize);
+
+                for k_pixels = 1:numel(heightImg)
+
+                    % Get the current pixel position
+                    if xc > mapSize(1)
+                        xc = 1;
+                        yc = yc + 1;
+                    end
+                    idx_pixel = sub2ind(flip(mapSize),mapSize(2)-yc,xc);
+                    
+                    if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                        xc = xc + 1;
+                        continue;
+                    end
+
+                    if hideSubstrate && any(ismember(k_pixels,pixelSkip))
+                        xc = xc + 1;
+                        continue;
+                    end
+
+                    if ~isfield(resultsStruct.(varNames{j}),'indMap')
+                        dataIn = {resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.dts_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipSize_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.nu_cell{k_pixels},...
+                            resultsStruct.(varNames{j}).ViscoClass.tipGeom,...
+                            resultsStruct.(varNames{j}).ViscoClass.minTimescale,...
+                            resultsStruct.(varNames{j}).ViscoClass.thinSample,...
+                            resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{k_pixels}};
+
+                        [~,~,F_hz,~,h_hz,~,~] = zTransformCurve(dataIn,'none',0.05,resultsStruct.(varNames{j}).ViscoClass.thinSample);
+                        F_hz = abs(F_hz);
+                        h_hz = abs(h_hz);
+                    else
+                        F_hz = abs(resultsStruct.(varNames{j}).forceMap{k_pixels});
+                        h_hz = abs(resultsStruct.(varNames{j}).indMap{k_pixels});
+                    end
+
+                    % Load and perform peak correction
+                    freq = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
+                    [~,maxid] = max(F_hz);
+                    freqAdj = freq(maxid);
+                    freq = freq - freqAdj;
+
+                    % Resample to known array of frequencies
+                    ids = ((freq >= min(magList)) & (freq <= max(magList)));
+
+                    if sum(ids,'all') < 2
+                        xc = xc + 1;
+                        continue;
+                    end
+
+                    if plotModel
+
+                        harmonicSettings = struct;
+                        harmonicSettings.elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
+                        harmonicSettings.fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
+                        harmonicSettings.model = resultsStruct.(varNames{j}).model;
+
+                        % Create a frequency array
+                        visco = resultsStruct.(varNames{j}).ViscoClass;
+                        elasticSetting = resultsStruct.(varNames{j}).elasticSetting;
+                        fluidSetting = resultsStruct.(varNames{j}).fluidSetting;
+
+                        % Generate a frequency array in log scale
+                        omega = 2.*pi.*freq;
+
+                        % Find the best number of terms for this pixel
+                        paramErrors = Inf(numel(resultsStruct.(varNames{j}).bestParams),1);
+                        for k = 1:numel(resultsStruct.(varNames{j}).bestParams)
+
+                            % Calculate the error for those parameters
+                            switch lower(resultsStruct.(varNames{j}).model)
+                                case 'maxwell'
+                                    % Grab the parameters
+                                    tempParams = resultsStruct.(varNames{j}).bestParams{k}{k_pixels};
+                                    switch errortype
+                                        case 'sse'
+                                            paramErrors(k) = sse_global(visco.forces_cell{k_pixels},...
+                                                LR_Maxwell(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                        case 'mse'
+                                            paramErrors(k) = mse_global(visco.forces_cell{k_pixels},...
+                                                LR_Maxwell(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                    numel(tempParams)*length(visco.tipSize_cell{k_pixels}));
+                                    end
+
+                                case 'voigt'
+                                    % Grab the parameters
+                                    tempParams = resultsStruct.(varNames{j}).bestParams{k}{k_pixels};
+                                    switch errortype
+                                        case 'sse'
+                                            paramErrors(k) = sse_global(visco.indentations_cell{k_pixels},...
+                                                LR_Voigt(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                        case 'mse'
+                                            paramErrors(k) = mse_global(visco.indentations_cell{k_pixels},...
+                                                LR_Voigt(tempParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                    numel(tempParams)*length(visco.tipSize_cell{k_pixels}));
+                                    end
+
+                                case 'plr'
+                                    switch errortype
+                                        case 'sse'
+                                            paramErrors(k) = sse_global(visco.indentations_cell{k_pixels},...
+                                                LR_PLR(resultsStruct.(varNames{j}).bestParams{2}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                        case 'mse'
+                                            paramErrors(k) = mse_global(visco.indentations_cell{k_pixels},...
+                                                LR_PLR(resultsStruct.(varNames{j}).bestParams{1}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                    numel(resultsStruct.(varNames{j}).bestParams{1}{k_pixels})*length(visco.tipSize_cell{k_pixels}));
+                                    end
+
+                                otherwise
+                                    error('The model in your results structure was not recognized.')
+                            end
+
+                        end
+
+                        % Determine the best number of arms for this pixel
+                        [~,idx] = min(paramErrors);
+                        bestidx = idx;
+                        for k = 1:length(paramErrors)
+                            if k == idx
+                                continue;
+                            end
+                            if 100*(paramErrors(idx)-paramErrors(k))/paramErrors(idx) < 1
+                                bestidx = k;                                
+                            end
+                        end
+
+                        harmonicSettings.bestParams = resultsStruct.(varNames{j}).bestParams{bestidx}{k_pixels};
+
+                        switch lower(resultsStruct.(varNames{j}).model)
+                            case 'maxwell'
+                                [modelStorage,modelLoss,modelAngle] = visco.harmonics_Maxwell(omega,harmonicSettings);
+                                switch errortype
+                                    case 'sse'
+                                        modelErrorTime = sse_global(visco.forces_cell{k_pixels},...
+                                            LR_Maxwell(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                    case 'mse'
+                                        modelErrorTime = mse_global(visco.forces_cell{k_pixels},...
+                                            LR_Maxwell(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.indentations_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                numel(harmonicSettings.bestParams)*length(visco.tipSize_cell{k_pixels}));
+                                end
+
+                            case 'voigt'
+                                [modelStorage,modelLoss,modelAngle] = visco.harmonics_Voigt(omega,harmonicSettings);
+                                switch errortype
+                                    case 'sse'
+                                        modelErrorTime = sse_global(visco.indentations_cell{k_pixels},...
+                                            LR_Voigt(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                    case 'mse'
+                                        modelErrorTime = mse_global(visco.indentations_cell{k_pixels},...
+                                            LR_Voigt(harmonicSettings.bestParams,visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                numel(harmonicSettings.bestParams)*length(visco.tipSize_cell{k_pixels}));
+                                end
+
+                            case 'plr'
+                                harmonicSettings.dt = dt;
+                                harmonicSettings.nu_sample = mode(cell2mat(cellfun(@(x)mode(round(x,4,'significant')),nu,'UniformOutput',false)));
+                                [modelStorage,modelLoss,modelAngle] = visco.harmonics_PLR(omega,harmonicSettings);
+                                switch errortype
+                                    case 'sse'
+                                        modelErrorTime = sse_global(visco.indentations_cell{k_pixels},...
+                                            LR_PLR(resultsStruct.(varNames{j}).bestParams{2}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting));
+                                    case 'mse'
+                                        modelErrorTime = mse_global(visco.indentations_cell{k_pixels},...
+                                            LR_PLR(resultsStruct.(varNames{j}).bestParams{1}{k_pixels},visco.times_cell{k_pixels},visco.dts_cell{k_pixels},visco.forces_cell{k_pixels},visco.tipSize_cell{k_pixels},visco.nu_cell{k_pixels},visco.tipGeom,elasticSetting,fluidSetting),...
+                                                numel(resultsStruct.(varNames{j}).bestParams{1}{k_pixels})*length(visco.tipSize_cell{k_pixels}));
+                                end
+
+                            otherwise
+                                error('The model in your results structure was not recognized.')
+                        end
+
+                        modelRelaxance = modelStorage + 1j*modelLoss;
+
+                        % Resample to known array of frequencies
+                        mapDataStorage(idx_pixel) = interp1(freq,modelStorage,evalPt,'makima',...
+                            NaN);
+                        mapDataLoss(idx_pixel) = interp1(freq,modelLoss,evalPt,'makima',...
+                            NaN);
+                        mapDataAngle(idx_pixel) = interp1(freq,modelAngle,evalPt,'makima',...
+                            NaN);
+                        mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,evalPt,'makima',...
+                            NaN);
+
+                        % Has to be from the time domain
+                        % (normalization issues)
+                        t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
+                        h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
+                        F_t = resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels};
+                        mapDataInd(idx_pixel) = interp1(t_t,h_t,1/evalPt,'makima',...
+                            1e-12);
+                        mapDataForce(idx_pixel) = interp1(t_t,F_t,1/evalPt,'makima',...
+                            1e-12);
+                        
+                        mapDataError(idx_pixel) = modelErrorTime;
+                        mapDataTerms(idx_pixel) = bestidx;
+
+                    else
+
+                        % We are just plotting the data captured
+                        % DIRECTLY from the z-transform method.
+                        modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
+                        modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
+                        modelAngle = atand(modelLoss./modelStorage);
+                        modelRelaxance = abs(resultsStruct.(varNames{j}).relaxanceMap{k_pixels});
+
+                        % Resample to known array of frequencies                        
+                        mapDataStorage(idx_pixel) = interp1(freq,modelStorage,evalPt,'makima',...
+                            NaN);
+                        mapDataLoss(idx_pixel) = interp1(freq,modelLoss,evalPt,'makima',...
+                            NaN);
+                        mapDataAngle(idx_pixel) = interp1(freq,modelAngle,evalPt,'makima',...
+                            NaN);
+                        mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,evalPt,'makima',...
+                            NaN);
+
+                        % Has to be from the time domain
+                        % (normalization issues)
+                        t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
+                        h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
+                        F_t = resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels};
+                        mapDataInd(idx_pixel) = interp1(t_t,h_t,1/evalPt,'makima',...
+                            1e-12);
+                        mapDataForce(idx_pixel) = interp1(t_t,F_t,1/evalPt,'makima',...
+                            1e-12);
+                            
+                    end
+                    
+                    mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+                    xc = xc + 1;
+
+                end
+                
+                if fillPixels
+                    % Perform Interpolation of non-viable pixels
+                    % (nothing for now, design something to average the
+                    % time series if possible
+                    
+                end
+
+                mapDataClusters = NaN(flip(mapSize));
+                idglobal = (mapIDglobal == j_dir);
+                idxKtemp = idxK(idglobal);
+                pixelLogtemp = pixelLogGlobal(idglobal,:);
+                for k_cluster = 1:numel(idxKtemp)
+                    mapDataClusters(pixelLogtemp(k_cluster,1),pixelLogtemp(k_cluster,2)) = idxKtemp(k_cluster);
+                end
+                
+                tiledlayout(n_rows,n_cols, 'padding', 'none', ...
+                    'TileSpacing', 'compact', ...
+                    'OuterPosition', [0 0.15 1 0.85])
+
+                ax = nexttile;
+
+                surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor',mapEdgeCol)
+                colormap(ax,'turbo')
+                hold on
+                title('Topography')
+                ylabel('Y Index')
+                xlabel('X Index')
+                xlim([1 max(mapSize)])
+                ylim([1 max(mapSize)])
+                cb = colorbar;
+                caxis([0 climHeight]); % Absolute scale
+                temp = (cb.Ticks' ./ 1e-6);
+                for ii = 1:numel(temp)
+                   cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
+                end
+                view(2)
+                pbaspect([1 1 1])
+                hold off
+                
+                if plotIndentation
+
+                    ax = nexttile;
+
+                    surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor',mapEdgeCol)
+                    colormap(ax,'turbo')
+                    hold on
+                    title(['Indentation' sprintf(', %d Hz',evalPt)])
+                    ylabel('Y Index')
+                    xlabel('X Index')
+                    xlim([1 max(mapSize)])
+                    ylim([1 max(mapSize)])
+                    cb = colorbar;
+                    caxis([0 climInd]); % Absolute scale
+                    temp = (cb.Ticks' ./ 1e-9);
+                    for ii = 1:numel(temp)
+                       cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
+                    end
+                    view(2)
+                    pbaspect([1 1 1])
+                    hold off
+
+                end
+
+                ax = nexttile;
+
+                switch clusterTarget
+                    case 'force'
+                        mapData = mapDataForce;
+                        plotTitle = 'Observed Force Clustering';
+                    case 'indentation'
+                        mapData = mapDataInd;
+                        plotTitle = 'Observed Indentation Clustering';
+                    case 'storage'
+                        mapData = mapDataStorage;
+                        plotTitle = 'Storage Modulus Clustering';
+                    case 'loss'
+                        mapData = mapDataLoss;
+                        plotTitle = 'Loss Modulus Clustering';
+                    case 'angle'
+                        mapData = mapDataAngle;
+                        plotTitle = 'Loss Angle Clustering';
+                    case 'relaxance'
+                        mapData = mapDataRelaxance;
+                        plotTitle = 'Relaxance Clustering';
+                end
+                
+                surf(X,Y,mapDataHeight,mapData,'EdgeColor',mapEdgeCol)
+                colormap(ax,mapColorName)
+                hold on
+                title([plotTitle sprintf(', %d Hz',evalPt)])
+                ylabel('Y Index')
+                xlabel('X Index')
+                xlim([1 max(mapSize)])
+                ylim([1 max(mapSize)])
+                cb = colorbar;
+                switch clusterTarget
+                    case 'force'
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
+                        temp = (cb.Ticks' .* 1e-9);
+                        for ii = 1:numel(temp)
+                           cb.TickLabels{ii} = sprintf('%1.1g nN',temp(ii));
+                        end
+                    case 'indentation'
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
+                        temp = (cb.Ticks' .* 1e-9);
+                        for ii = 1:numel(temp)
+                           cb.TickLabels{ii} = sprintf('%1.1g nm',temp(ii));
+                        end
+                    case 'storage'
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
+                        temp = (cb.Ticks' .* 1e-3);
+                        for ii = 1:numel(temp)
+                           cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+                        end
+                    case 'loss'
+                        caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
+                        temp = (cb.Ticks' .* 1e-3);
+                        for ii = 1:numel(temp)
+                           cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+                        end
+                    case 'angle'
+                        cb = colorbar;
+                        cb.Ruler.TickLabelFormat='%d Deg';
+                        caxis([0 90]);
+                end
+                                
+                view(2)
+                pbaspect([1 1 1])
+                hold off
+                
+                ax = nexttile;
+
+                surf(X,Y,mapDataHeight,mapDataClusters,'EdgeColor',mapEdgeCol)
+                colormap(ax,mapColorName)
+                hold on
+                title('DTW Clusters')
+                ylabel('Y Index')
+                xlabel('X Index')
+                xlim([1 max(mapSize)])
+                ylim([1 max(mapSize)])
+                cb = colorbar('Ticks',1:eva.OptimalK,...
+                    'TickLabels',sprintfc('Bin %d',[1:eva.OptimalK]));
+                view(2)
+                pbaspect([1 1 1])
+                hold off
+                
+                saveas(mapPlotWindow,[plotFile '.fig'])
+%                 saveas(mapPlotKMeans,[plotFile '.jpg'])
+                print(mapPlotWindow,[plotFile '.png'],'-dpng','-r300');
+                
+                % Save Clusters to the Results File
+                if ~isfield(resultsStruct.(varNames{j}), 'clusterData')
+                    % Create a placeholder struct where we store all of the
+                    % cluster results for each type of analysis. This is
+                    % critical, since it means we can run studies on
+                    % different clustering methods and compare results
+                    % later.
+                    temp = struct;
+                    for jj = 1:6
+                        switch jj
+                            case 1
+                                temp(jj).clusterVar = 'force';
+                                
+                            case 2
+                                temp(jj).clusterVar = 'indentation';
+                                
+                            case 3
+                                temp(jj).clusterVar = 'storage';
+                                
+                            case 4
+                                temp(jj).clusterVar = 'loss';
+                                
+                            case 5
+                                temp(jj).clusterVar = 'angle';
+                                
+                            case 6
+                                temp(jj).clusterVar = 'relaxance';                                
+                        end
+                        temp(jj).clusterMap = {};
+                        temp(jj).globalClusterMap = {};
+                        temp(jj).clusterMap2D = {};
+                        temp(jj).globalClusterMap2D = [];
+                        temp(jj).lastUpdate = '';
+                    end
+                    
+                    resultsStruct.(varNames{j}).clusterData = temp;
+                    
+                end
+                
+                cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
+                resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap = num2cell(idxKtemp');
+                resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap2D = mapDataClusters;
+                resultsStruct.(varNames{j}).clusterData(cid).lastUpdate = datestr(now);
+                
+                if isfield(resultsStruct.(varNames{j}), 'trueBinsMap')
+                    
+                    % This is a test dataset where we have the "true" bins
+                    % available. Quickly determine whether we have any
+                    % incorrect values, and from that imply our accuracy.
+                    
+                    nBins = max(unique(idxKtemp),[],'all');
+                    
+                    for jj = 1:numel([resultsStruct.(varNames{j}).clusterData(:)])
+
+                        % Loop through all of the observables used
+                        if isempty(resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D)
+                            % Obviously we didn't analyze this observable,
+                            % because there are no results!
+                            continue;
+                        end
+                        
+                        clusterAcc = 0;
+                        
+                        for kk = 1:nBins
+
+                            % The clustered bins might not be in the correct
+                            % "orientation". This would mean that the clustering
+                            % could have correctly separated the regions, BUT it
+                            % assigned the innermost bin as #1 instead of #3 for
+                            % example. So we will loop through the combos and
+                            % ensure we have the highest accuracy calculation
+                            % possible.
+
+                            % Cycle through the bin orientations
+                            if kk == 1
+                                mapDataClusters = resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D;
+                            else
+                                mapDataClusters = mapDataClusters - 1;
+                            end
+                            mapDataClusters(mapDataClusters == 0) = nBins;
+
+                            binDelta = (mapDataClusters ~= resultsStruct.(varNames{j}).trueBinsMap);
+                            temp = 1 - (sum(binDelta,'all') / numel(binDelta));
+
+                            if kk == 1
+
+                                % This is the original configuration. This
+                                % info is already saved in the output
+                                % structure.
+                                clusterAcc = temp;
+
+                            elseif temp > clusterAcc
+
+                                % The clustering resulted in swapped
+                                % positions (i.e. it put "2" where the true
+                                % solution has "3" and/or vice versa). It
+                                % correctly separated the regions, BUT the
+                                % number is wrong. We should update all of
+                                % our results to use the configuration
+                                % closest to our ground truth.
+                                clusterAcc = temp;
+                                
+                                idxKnew = NaN(size(idxKtemp));
+                                for k_cluster = 1:numel(idxKnew)
+                                    idxKnew(k_cluster) = mapDataClusters(pixelLogtemp(k_cluster,1),pixelLogtemp(k_cluster,2));
+                                end
+                                if ~isrow(idxKnew) idxKnew = idxKnew'; end
+                                
+                                resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap = num2cell(idxKnew);
+                                resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D = mapDataClusters;
+                                resultsStruct.(varNames{j}).clusterData(jj).lastUpdate = datestr(now);
+
+                            end
+
+                        end
+                        
+                        fprintf('\nThe Global Clustering Accuracy was %3.2f%% (%s)\n',100*clusterAcc, resultsStruct.(varNames{j}).clusterData(jj).clusterVar);
+
+                    end
+                                        
+                end
+                
+                % Add our clusters to the file
+                save([Files(j_dir).folder filesep Files(j_dir).name],'-struct','resultsStruct','-v7.3');
+                                
+            end
+            
+            clearvars resultsStruct mapSize
+                        
+        end
+        
+        fprintf('Saved Output Plots/Files!\n');
+                
     end
     
 catch ERROR
         
-    fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
+    fprintf('ERROR Clustering Directory #%d of %d\n',i_dir,length(Folders));
     fprintf('The identifier was:\n%s',ERROR.identifier);
     fprintf('Message:%s\n',ERROR.message);
+    fprintf('Line Number:%d\n',ERROR.stack(end).line);
     fprintf('Skipping to next directory...\n');
 
 end
-    
+
+fprintf('Global Clustering Complete!\n');
+
+% Clear Previous Parpool
+if ~isempty(gcp('nocreate'))
+   % Get the current pool
+    poolobj = gcp('nocreate');
+    delete(poolobj);
 end
 
+end
