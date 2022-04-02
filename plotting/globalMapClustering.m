@@ -290,6 +290,14 @@ try
                 else
                     mapSize = [128 128];
                 end
+                
+                if isfield(resultsStruct.(varNames{j}),'scanSize')
+                    % We have the absolute map size!
+                    scanSize = resultsStruct.(varNames{j}).scanSize;
+                    xdataAbs = 0:(scanSize(1)/(mapSize(1)-1)):scanSize(1);
+                    ydataAbs = flip(0:(scanSize(2)/(mapSize(2)-1)):scanSize(2));
+                    [XA, YA] = meshgrid(xdataAbs,ydataAbs);
+                end
 
                 pixelHeight_cell = resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell;
 
@@ -687,6 +695,14 @@ try
                 else
                     mapSize = [128 128];
                 end
+                
+                if isfield(resultsStruct.(varNames{j}),'scanSize')
+                    % We have the absolute map size!
+                    scanSize = resultsStruct.(varNames{j}).scanSize;
+                    xdataAbs = 0:(scanSize(1)/(mapSize(1)-1)):scanSize(1);
+                    ydataAbs = flip(0:(scanSize(2)/(mapSize(2)-1)):scanSize(2));
+                    [XA, YA] = meshgrid(xdataAbs,ydataAbs);
+                end
 
                 pixelHeight_cell = resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell;
 
@@ -1079,20 +1095,36 @@ try
                     mapDataClusters(pixelLogtemp(k_cluster,1),pixelLogtemp(k_cluster,2)) = idxKtemp(k_cluster);
                 end
                 
+                if exist('XA','var') && exist('YA','var')
+                    XPlot = XA./1e-6;
+                    xlab = sprintf('X Position [\\mum]');
+                    xlims = [0 max(scanSize)./1e-6];
+                    YPlot = YA./1e-6;
+                    ylab = sprintf('Y Position [\\mum]');
+                    ylims = [0 max(scanSize)./1e-6];
+                else
+                    XPlot = X;
+                    xlab = 'X Index';
+                    xlims = [1 max(mapSize)];
+                    YPlot = Y;
+                    ylab = 'Y Index';
+                    ylims = [1 max(mapSize)];
+                end
+                
                 tiledlayout(n_rows,n_cols, 'padding', 'none', ...
                     'TileSpacing', 'compact', ...
                     'OuterPosition', [0 0.15 1 0.85])
 
                 ax = nexttile;
 
-                surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor',mapEdgeCol)
+                surf(XPlot,YPlot,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor',mapEdgeCol)
                 colormap(ax,'turbo')
                 hold on
                 title('Topography')
-                ylabel('Y Index')
-                xlabel('X Index')
-                xlim([1 max(mapSize)])
-                ylim([1 max(mapSize)])
+                ylabel(ylab)
+                xlabel(xlab)
+                xlim(xlims)
+                ylim(ylims)
                 cb = colorbar;
                 caxis([0 climHeight]); % Absolute scale
                 temp = (cb.Ticks' ./ 1e-6);
@@ -1107,14 +1139,14 @@ try
 
                     ax = nexttile;
 
-                    surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor',mapEdgeCol)
+                    surf(XPlot,YPlot,mapDataHeight,mapDataInd,'EdgeColor',mapEdgeCol)
                     colormap(ax,'turbo')
                     hold on
                     title(['Indentation' sprintf(', %d Hz',evalPt)])
-                    ylabel('Y Index')
-                    xlabel('X Index')
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
+                    ylabel(ylab)
+                    xlabel(xlab)
+                    xlim(xlims)
+                    ylim(ylims)
                     cb = colorbar;
                     caxis([0 climInd]); % Absolute scale
                     temp = (cb.Ticks' ./ 1e-9);
@@ -1150,14 +1182,14 @@ try
                         plotTitle = 'Relaxance Clustering';
                 end
                 
-                surf(X,Y,mapDataHeight,mapData,'EdgeColor',mapEdgeCol)
+                surf(XPlot,YPlot,mapDataHeight,mapData,'EdgeColor',mapEdgeCol)
                 colormap(ax,mapColorName)
                 hold on
                 title([plotTitle sprintf(', %d Hz',evalPt)])
-                ylabel('Y Index')
-                xlabel('X Index')
-                xlim([1 max(mapSize)])
-                ylim([1 max(mapSize)])
+                ylabel(ylab)
+                xlabel(xlab)
+                xlim(xlims)
+                ylim(ylims)
                 cb = colorbar;
                 switch clusterTarget
                     case 'force'
@@ -1196,14 +1228,14 @@ try
                 
                 ax = nexttile;
 
-                surf(X,Y,mapDataHeight,mapDataClusters,'EdgeColor',mapEdgeCol)
+                surf(XPlot,YPlot,mapDataHeight,mapDataClusters,'EdgeColor',mapEdgeCol)
                 colormap(ax,mapColorName)
                 hold on
                 title('DTW Clusters')
-                ylabel('Y Index')
-                xlabel('X Index')
-                xlim([1 max(mapSize)])
-                ylim([1 max(mapSize)])
+                ylabel(ylab)
+                xlabel(xlab)
+                xlim(xlims)
+                ylim(ylims)
                 cb = colorbar('Ticks',1:eva.OptimalK,...
                     'TickLabels',sprintfc('Bin %d',[1:eva.OptimalK]));
                 view(2)

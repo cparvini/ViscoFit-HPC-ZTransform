@@ -31,6 +31,12 @@ end
 
 mapSize = mapSizeList{1};
 
+if iscell(mapSize)
+    while iscell(mapSize)
+        mapSize = mapSize{1};
+    end
+end
+
 % axes meshgrid for scattering data
 xdata = 1:mapSize(1);
 ydata = flip(1:mapSize(2));

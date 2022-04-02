@@ -861,6 +861,12 @@ elseif(strcmpi(extension,valid_extensions{4}))
             elseif contains(header_metadata_raw2{j,1},'quantitative-imaging-map.position-pattern.grid.jlength')
                 temp = strsplit(header_metadata_raw2{j,1},'=');
                 mapH = str2double(temp{1,2});
+            elseif contains(header_metadata_raw2{j,1},'quantitative-imaging-map.position-pattern.grid.ulength')
+                temp = strsplit(header_metadata_raw2{j,1},'=');
+                mapWAbs = str2double(temp{1,2});
+            elseif contains(header_metadata_raw2{j,1},'quantitative-imaging-map.position-pattern.grid.vlength')
+                temp = strsplit(header_metadata_raw2{j,1},'=');
+                mapHAbs = str2double(temp{1,2});
             end
         end
         
@@ -878,9 +884,12 @@ elseif(strcmpi(extension,valid_extensions{4}))
         FC_Data_out(7).Channel_name = 'mapsize';
         FC_Data_out(7).extend = [mapW mapH];
         
-        FC_Data_out(8).Channel_name = 'stiffness';
+        FC_Data_out(8).Channel_name = 'scansize';
+        FC_Data_out(8).extend = [mapWAbs mapHAbs];
+        
+        FC_Data_out(9).Channel_name = 'stiffness';
         idx = find(strcmpi({FC_Data.Channel_name},'vDeflection'));
-        FC_Data_out(8).extend = str2double(FC_Data(idx).force.Multiplier);
+        FC_Data_out(9).extend = str2double(FC_Data(idx).force.Multiplier);
         
         % Save the FC output structure to our master list and manage some
         % memory.

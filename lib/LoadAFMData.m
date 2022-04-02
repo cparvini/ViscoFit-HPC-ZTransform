@@ -411,6 +411,9 @@ for k = 1:length(Files)
                 idx = find(contains({fileStruct{i_pix}(:).Channel_name},'mapsize'),1);
                 dataStruct(i_pix+indShift).mapSize = fileStruct{i_pix}(idx).extend;
                 
+                idx = find(contains({fileStruct{i_pix}(:).Channel_name},'scansize'),1);
+                dataStruct(i_pix+indShift).scanSize = fileStruct{i_pix}(idx).extend;
+                
                 idx = find(contains({fileStruct{i_pix}(:).Channel_name},'stiffness'),1);
                 k_cantilever(i_pix+indShift) = fileStruct{i_pix}(idx).extend;
                 
@@ -459,9 +462,12 @@ for k = 1:length(Files)
                 % Verify map size
                 overrideSize = false;
                 idx = find(contains({fileStruct{1+indShift}(:).Channel_name},'mapsize'),1);
+                idx2 = find(contains({fileStruct{1+indShift}(:).Channel_name},'scansize'),1);
                 if prod(fileStruct{1+indShift}(idx).extend) > numPixels
                     longAx = max(fileStruct{1+indShift}(idx).extend);
+                    longAxDim = max(fileStruct{1+indShift}(idx2).extend);
                     trueMapSize = [longAx floor(numPixels/longAx)];
+                    trueScanSize = longAxDim.*[1 floor(numPixels/longAx)/longAx];
                     overrideSize = true;
                     
                     % Now, remove the rows which are beyond what we care to
@@ -509,10 +515,13 @@ for k = 1:length(Files)
                     run_number(i_pix+indShift) = 1;     % Run Number
                     
                     idx = find(contains({fileStruct{i_pix}(:).Channel_name},'mapsize'),1);
+                    idx2 = find(contains({fileStruct{i_pix}(:).Channel_name},'scansize'),1);
                     if overrideSize
                         dataStruct(i_pix+indShift).mapSize = trueMapSize;
+                        dataStruct(i_pix+indShift).scanSize = trueScanSize;
                     else
                         dataStruct(i_pix+indShift).mapSize = fileStruct{i_pix}(idx).extend;
+                        dataStruct(i_pix+indShift).scanSize = fileStruct{i_pix}(idx2).extend;
                     end
                     
                     idx = find(contains({fileStruct{i_pix}(:).Channel_name},'stiffness'),1);

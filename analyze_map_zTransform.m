@@ -190,6 +190,7 @@ for i_dir = 1:length(Folders)
             tipSize = cell(size(forces));
             nu = cell(size(forces));
             mapSize = cell(size(forces));
+            scanSize = cell(size(forces));
             pixelHeight = cell(size(forces));
 
             ipix = 0;
@@ -219,6 +220,7 @@ for i_dir = 1:length(Folders)
                 tipSize{ipix} = dataStruct(i).r_tip;
                 nu{ipix} = dataStruct(i).nu_sample;
                 mapSize{ipix} = dataStruct(i).mapSize;
+                scanSize{ipix} = dataStruct(i).scanSize;
                 pixelHeight{ipix} = dataStruct(i).height;
             end
 
@@ -262,6 +264,7 @@ for i_dir = 1:length(Folders)
             end
             
             zTransformAnalysis.mapSize = mode(cat(1,mapSize{:}),1);
+            zTransformAnalysis.scanSize = mode(cat(1,scanSize{:}),1);
             zTransformAnalysis.windowsize = extractionSettings.windowsize;
             zTransformAnalysis.smoothOpt = extractionSettings.smoothOpt;
             zTransformAnalysis.correctTilt = classSettings.correctTilt;

@@ -144,6 +144,14 @@ try
                 else
                     mapSize = [128 128];
                 end
+                
+                if isfield(resultsStruct.(varNames{j}),'scanSize')
+                    % We have the absolute map size!
+                    scanSize = resultsStruct.(varNames{j}).scanSize;
+                    xdataAbs = 0:(scanSize(1)/(mapSize(1)-1)):scanSize(1);
+                    ydataAbs = flip(0:(scanSize(2)/(mapSize(2)-1)):scanSize(2));
+                    [XA, YA] = meshgrid(xdataAbs,ydataAbs);
+                end
 
                 pixelHeight_cell = resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell;
 
@@ -151,7 +159,7 @@ try
                 xdata = 1:mapSize(1);
                 ydata = flip(1:mapSize(2));
                 [X, Y] = meshgrid(xdata,ydata);
-
+                
                 minFreq = Inf;
                 maxFreq = 0;
                 for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
@@ -715,6 +723,22 @@ try
                     mapDataLoss(mapDataLoss == 0) = NaN;
                     mapDataAngle(mapDataAngle == 0) = NaN;
                     mapDataInd(mapDataInd == 0) = NaN;
+                    
+                    if exist('XA','var') && exist('YA','var')
+                        XPlot = XA./1e-6;
+                        xlab = sprintf('X Position [\\mum]');
+                        xlims = [0 max(scanSize)./1e-6];
+                        YPlot = YA./1e-6;
+                        ylab = sprintf('Y Position [\\mum]');
+                        ylims = [0 max(scanSize)./1e-6];
+                    else
+                        XPlot = X;
+                        xlab = 'X Index';
+                        xlims = [1 max(mapSize)];
+                        YPlot = Y;
+                        ylab = 'Y Index';
+                        ylims = [1 max(mapSize)];
+                    end
 
                     tiledlayout(n_rows,n_cols, 'padding', 'none', ...
                         'TileSpacing', 'compact', ...
@@ -722,19 +746,19 @@ try
 
                     ax = nexttile;
 
-                    surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
+                    surf(XPlot,YPlot,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
                     colormap(ax,'turbo')
                     hold on
                     box(ax,boxSetting)
                     title('Topography')
                     if showLabels
-                        ylabel('Y Index')
-                        xlabel('X Index')
+                        ylabel(ylab)
+                        xlabel(xlab)
                     else
                         set(gca,'YTickLabel',[],'XTickLabel',[])
                     end
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
+                    xlim(xlims)
+                    ylim(ylims)
                     cb = colorbar;
                     caxis([0 climHeight]); % Absolute scale
                     temp = (cb.Ticks' ./ 1e-6);
@@ -749,18 +773,18 @@ try
 
                         ax = nexttile;
 
-                        surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor','interp')
+                        surf(XPlot,YPlot,mapDataHeight,mapDataInd,'EdgeColor','interp')
                         colormap(ax,'turbo')
                         hold on
                         box(ax,boxSetting)
                         title('Indentation')
                         if showLabels
-                            xlabel('X Index')
+                            xlabel(xlab)
                         else
                             set(gca,'YTickLabel',[],'XTickLabel',[])
                         end
-                        xlim([1 max(mapSize)])
-                        ylim([1 max(mapSize)])
+                        xlim(xlims)
+                        ylim(ylims)
                         cb = colorbar;
                         if ~hardClim
                             caxis([0 indMax]); % Absolute scale
@@ -779,18 +803,18 @@ try
 
                     ax = nexttile;
 
-                    surf(X,Y,mapDataHeight,mapDataStorage,'EdgeColor','interp')
+                    surf(XPlot,YPlot,mapDataHeight,mapDataStorage,'EdgeColor','interp')
                     colormap(ax,mapColorName)
                     hold on
                     box(ax,boxSetting)
                     title('Storage Modulus')
                     if showLabels
-                        xlabel('X Index')
+                        xlabel(xlab)
                     else
                         set(gca,'YTickLabel',[],'XTickLabel',[])
                     end
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
+                    xlim(xlims)
+                    ylim(ylims)
                     cb = colorbar;
                     if ~hardClim
                         caxis([0 storMax]); % Absolute scale
@@ -807,18 +831,18 @@ try
 
                     ax = nexttile;
 
-                    surf(X,Y,mapDataHeight,mapDataLoss,'EdgeColor','interp')
+                    surf(XPlot,YPlot,mapDataHeight,mapDataLoss,'EdgeColor','interp')
                     colormap(ax,mapColorName)
                     hold on
                     box(ax,boxSetting)
                     title('Loss Modulus')
                     if showLabels
-                        xlabel('X Index')
+                        xlabel(xlab)
                     else
                         set(gca,'YTickLabel',[],'XTickLabel',[])
                     end
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
+                    xlim(xlims)
+                    ylim(ylims)
                     cb = colorbar;
                     if ~hardClim
                         caxis([0 lossMax]); % Absolute scale
@@ -835,18 +859,18 @@ try
 
                     ax = nexttile;
 
-                    surf(X,Y,mapDataHeight,mapDataAngle,'EdgeColor','interp')
+                    surf(XPlot,YPlot,mapDataHeight,mapDataAngle,'EdgeColor','interp')
                     colormap(ax,mapColorName)
                     hold on
                     box(ax,boxSetting)
                     title('Loss Angle')
                     if showLabels
-                        xlabel('X Index')
+                        xlabel(xlab)
                     else
                         set(gca,'YTickLabel',[],'XTickLabel',[])
                     end
-                    xlim([1 max(mapSize)])
-                    ylim([1 max(mapSize)])
+                    xlim(xlims)
+                    ylim(ylims)
                     cb = colorbar;
                     cb.Ruler.TickLabelFormat='%g Deg';
                     caxis([0 90]);
@@ -857,16 +881,16 @@ try
                     if plotModel
                         ax = nexttile;
 
-                        surf(X,Y,mapDataHeight,mapDataTerms)
+                        surf(XPlot,YPlot,mapDataHeight,mapDataTerms)
                         colormap(ax,mapColorName)
                         colormap(gca,'parula')
                         hold on
                         box(ax,boxSetting)
-                        xlim([1 max(mapSize)])
-                        ylim([1 max(mapSize)])
+                        xlim(xlims)
+                        ylim(ylims)
                         title(sprintf('Number of Terms'))
                         if showLabels
-                            xlabel('X Index')
+                            xlabel(xlab)
                         else
                             set(gca,'YTickLabel',[],'XTickLabel',[])
                         end

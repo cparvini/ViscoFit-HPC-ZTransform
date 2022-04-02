@@ -188,6 +188,7 @@ for i_dir = 1:length(Folders)
         tipSize = cell(size(forces));
         nu = cell(size(forces));
         mapSize = cell(size(forces));
+        scanSize = cell(size(forces));
         pixelHeight = cell(size(forces));
 
         ipix = 0;
@@ -217,6 +218,7 @@ for i_dir = 1:length(Folders)
             tipSize{ipix} = dataStruct(i).r_tip;
             nu{ipix} = dataStruct(i).nu_sample;
             mapSize{ipix} = dataStruct(i).mapSize;
+            scanSize{ipix} = dataStruct(i).scanSize;
             pixelHeight{ipix} = dataStruct(i).height;
         end
 
@@ -277,6 +279,7 @@ for i_dir = 1:length(Folders)
         end
         
         maxwellFit_zTransform.mapSize = mode(cat(1,mapSize{:}),1);
+        maxwellFit_zTransform.scanSize = mode(cat(1,scanSize{:}),1);
         save([path filesep savePrepend fileID{mapidx} '_FitResults_NelderMead_zTransform.mat'],'maxwellFit_zTransform','-v7.3')
         clearvars maxwellFit_zTransform
 
@@ -284,6 +287,7 @@ for i_dir = 1:length(Folders)
 %         fitSettings.model = 'voigt';
 %         voigtFit_zTransform = fitMapZ_func(visco,fitSettings);
 %         voigtFit_zTransform.mapSize = mode(cat(1,mapSize{:}),1);
+%         voigtFit_zTransform.scanSize = mode(cat(1,scanSize{:}),1);
 %         save([path filesep savePrepend fileID{mapidx} '_FitResults_NelderMead_zTransform.mat'],'voigtFit_zTransform','-append')
 %         clearvars voigtFit_zTransform
 
@@ -291,6 +295,7 @@ for i_dir = 1:length(Folders)
 %         fitSettings.model = 'PLR';
 %         PLRFit_zTransform = fitMapZ_func(visco,fitSettings);
 %         PLRFit_zTransform.mapSize = mode(cat(1,mapSize{:}),1);
+%         PLRFit_zTransform.scanSize = mode(cat(1,scanSize{:}),1);
 %         save([path filesep savePrepend fileID{mapidx} '_FitResults_NelderMead_zTransform.mat'],'PLRFit_zTransform','-append')
 %         clearvars PLRFit_zTransform
         
