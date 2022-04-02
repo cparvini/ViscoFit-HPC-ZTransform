@@ -4,7 +4,7 @@ function [] = makeZAnimation(originalPath,varargin)
 %   animation showing the viscoelastic properties from a Z-Transform
 %   Results file. The results file is created using either the
 %   "analyze_map_zTransform" function or "fit_map_zTransform".
-    
+
 % User-Defined Settings
 correctTilt = true;
 hideSubstrate = true;
@@ -12,6 +12,9 @@ zeroSubstrate = true;
 fillPixels = true;
 plotIndentation = true;
 logSteps = true;
+freqBar = true;
+showLabels = true;
+climMax = 2e5;
 if nargin > 1
     if ~isempty(varargin)
         for i = 1:numel(varargin)
@@ -40,6 +43,23 @@ if nargin > 1
                     if ~isempty(varargin{i})
                         logSteps = varargin{i};                        
                     end
+                case 7
+                    if ~isempty(varargin{i})
+                        freqBar = varargin{i};                        
+                    end
+                case 8
+                    if ~isempty(varargin{i})
+                        showLabels = varargin{i};                        
+                    end
+                case 9
+                    if ~isempty(varargin{i})
+                        if isa(varargin{i},'numeric')
+                            climMax = varargin{i};
+                        else
+                            climMax = 2e5; % Pa
+                            warning('You provided a non-numeric input for the stiffness plot limit to makeZAnimation(). Using the default value instead (2e5 Pa)');
+                        end
+                    end
                 otherwise
                     fprintf('Passed additional parameters to fit_map() which were not used.');
             end
@@ -56,7 +76,8 @@ maxCol = 5;
 maxwid = get(0,'screensize');
 maxwid = maxwid(3);
 mapColorName = 'turbo';
-climMax = 2e5; % Pa
+boxSetting = 'on';
+hardClim = true;
 climHeight = 15e-6; % meters, the JPK Nanowizard has a 15um piezo 
 climInd = 1000e-9; % meters
 stiffMax = 10*climMax; % Pa
@@ -244,30 +265,30 @@ try
                     end
                     
                     % Update Force
-                    if max(resultsStruct.(varNames{j}).forceMap{k_pixels},[],'all') > forceMax
-                        forceMax = max(resultsStruct.(varNames{j}).forceMap{k_pixels},[],'all');
+                    if mean(resultsStruct.(varNames{j}).forceMap{k_pixels},'all','omitnan') > forceMax
+                        forceMax = mean(resultsStruct.(varNames{j}).forceMap{k_pixels},'all','omitnan');
                     end
                     
                     % Update Indentation
-                    if max(resultsStruct.(varNames{j}).indMap{k_pixels},[],'all') > indMax
-                        indMax = max(resultsStruct.(varNames{j}).indMap{k_pixels},[],'all');
+                    if mean(resultsStruct.(varNames{j}).indMap{k_pixels},'all','omitnan') > indMax
+                        indMax = mean(resultsStruct.(varNames{j}).indMap{k_pixels},'all','omitnan');
                     end
                     
                     % Update Relaxance
-                    if max(resultsStruct.(varNames{j}).relaxanceMap{k_pixels},[],'all') > relaxMax
-                        relaxMax = max(resultsStruct.(varNames{j}).relaxanceMap{k_pixels},[],'all');
+                    if mean(resultsStruct.(varNames{j}).relaxanceMap{k_pixels},'all','omitnan') > relaxMax
+                        relaxMax = mean(resultsStruct.(varNames{j}).relaxanceMap{k_pixels},'all','omitnan');
                     end
                     
                     % Update Storage Mod
                     temp1 = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
-                    if max(temp1,[],'all') > storMax
-                        storMax = max(temp1,[],'all');
+                    if mean(temp1,'all','omitnan') > storMax
+                        storMax = mean(temp1,'all','omitnan');
                     end
                     
                     % Update Loss Mod
                     temp2 = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
-                    if max(temp2,[],'all') > lossMax
-                        lossMax = max(temp2,[],'all');
+                    if mean(temp2,'all','omitnan') > lossMax
+                        lossMax = mean(temp2,'all','omitnan');
                     end
                     
                 end
@@ -292,29 +313,32 @@ try
                         end
                     end
 
-                    % Original, using uicontrols
-%                     u = uicontrol(mapPlotWindow,'Style','slider');
-%                     u.Position = [20 15 figWid-230 20];
-%                     u.Max = max(freqList);
-%                     u.Min = min(freqList);
-%                     u.Value = freqList(1);
-%                     u2 = uicontrol(mapPlotWindow,'Style','edit');
-%                     u2.Position = [figWid-175 10 150 40];
-%                     u2.String = [num2str(round(freqList(1))) ' Hz'];
-%                     u2.FontSize = 16;
-
-                    % Method 2, using annotation
-                    pos = [figWid-175 10 150 25];
-                    str = [num2str(round(freqList(k_freq))) ' Hz'];
-                    annotation('textbox',...
-                        'Units','pixels',...
-                        'Position',pos,...
-                        'String',str,...
-                        'FitBoxToText','on',...
-                        'BackgroundColor','white',...
-                        'HorizontalAlignment','center',...
-                        'VerticalAlignment','middle',...
-                        'FontSize',16);
+                    
+                    if freqBar
+                        % Original, using uicontrols
+                        u = uicontrol(mapPlotWindow,'Style','slider');
+                        u.Position = [20 15 figWid-230 20];
+                        u.Max = max(freqList);
+                        u.Min = min(freqList);
+                        u.Value = freqList(1);
+                        u2 = uicontrol(mapPlotWindow,'Style','edit');
+                        u2.Position = [figWid-175 10 150 40];
+                        u2.String = [num2str(round(freqList(1))) ' Hz'];
+                        u2.FontSize = 16;
+                    else
+                        % Method 2, using annotation
+                        pos = [figWid-175 10 150 25];
+                        str = [num2str(round(freqList(k_freq))) ' Hz'];
+                        annotation('textbox',...
+                            'Units','pixels',...
+                            'Position',pos,...
+                            'String',str,...
+                            'FitBoxToText','on',...
+                            'BackgroundColor','white',...
+                            'HorizontalAlignment','center',...
+                            'VerticalAlignment','middle',...
+                            'FontSize',16);
+                    end
 
                     % Make blank map data
                     mapDataStorage = NaN(flip(mapSize));
@@ -701,9 +725,14 @@ try
                     surf(X,Y,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
                     colormap(ax,'turbo')
                     hold on
+                    box(ax,boxSetting)
                     title('Topography')
-                    ylabel('Y Index')
-                    xlabel('X Index')
+                    if showLabels
+                        ylabel('Y Index')
+                        xlabel('X Index')
+                    else
+                        set(gca,'YTickLabel',[],'XTickLabel',[])
+                    end
                     xlim([1 max(mapSize)])
                     ylim([1 max(mapSize)])
                     cb = colorbar;
@@ -723,13 +752,21 @@ try
                         surf(X,Y,mapDataHeight,mapDataInd,'EdgeColor','interp')
                         colormap(ax,'turbo')
                         hold on
+                        box(ax,boxSetting)
                         title('Indentation')
-                        ylabel('Y Index')
-                        xlabel('X Index')
+                        if showLabels
+                            xlabel('X Index')
+                        else
+                            set(gca,'YTickLabel',[],'XTickLabel',[])
+                        end
                         xlim([1 max(mapSize)])
                         ylim([1 max(mapSize)])
                         cb = colorbar;
-                        caxis([0 indMax]); % Absolute scale
+                        if ~hardClim
+                            caxis([0 indMax]); % Absolute scale
+                        else
+                            caxis([0 climMax]);
+                        end
                         temp = (cb.Ticks' ./ 1e-9);
                         for ii = 1:numel(temp)
                            cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
@@ -745,13 +782,21 @@ try
                     surf(X,Y,mapDataHeight,mapDataStorage,'EdgeColor','interp')
                     colormap(ax,mapColorName)
                     hold on
+                    box(ax,boxSetting)
                     title('Storage Modulus')
-                    ylabel('Y Index')
-                    xlabel('X Index')
+                    if showLabels
+                        xlabel('X Index')
+                    else
+                        set(gca,'YTickLabel',[],'XTickLabel',[])
+                    end
                     xlim([1 max(mapSize)])
                     ylim([1 max(mapSize)])
                     cb = colorbar;
-                    caxis([0 storMax]);
+                    if ~hardClim
+                        caxis([0 storMax]); % Absolute scale
+                    else
+                        caxis([0 climMax]);
+                    end
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
@@ -765,12 +810,21 @@ try
                     surf(X,Y,mapDataHeight,mapDataLoss,'EdgeColor','interp')
                     colormap(ax,mapColorName)
                     hold on
+                    box(ax,boxSetting)
                     title('Loss Modulus')
-                    xlabel('X Index')
+                    if showLabels
+                        xlabel('X Index')
+                    else
+                        set(gca,'YTickLabel',[],'XTickLabel',[])
+                    end
                     xlim([1 max(mapSize)])
                     ylim([1 max(mapSize)])
                     cb = colorbar;
-                    caxis([0 lossMax]);
+                    if ~hardClim
+                        caxis([0 lossMax]); % Absolute scale
+                    else
+                        caxis([0 climMax]);
+                    end
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
@@ -784,8 +838,13 @@ try
                     surf(X,Y,mapDataHeight,mapDataAngle,'EdgeColor','interp')
                     colormap(ax,mapColorName)
                     hold on
+                    box(ax,boxSetting)
                     title('Loss Angle')
-                    xlabel('X Index')
+                    if showLabels
+                        xlabel('X Index')
+                    else
+                        set(gca,'YTickLabel',[],'XTickLabel',[])
+                    end
                     xlim([1 max(mapSize)])
                     ylim([1 max(mapSize)])
                     cb = colorbar;
@@ -802,10 +861,15 @@ try
                         colormap(ax,mapColorName)
                         colormap(gca,'parula')
                         hold on
+                        box(ax,boxSetting)
                         xlim([1 max(mapSize)])
                         ylim([1 max(mapSize)])
                         title(sprintf('Number of Terms'))
-                        xlabel('X Index')
+                        if showLabels
+                            xlabel('X Index')
+                        else
+                            set(gca,'YTickLabel',[],'XTickLabel',[])
+                        end
                         cb = colorbar;
                         set(cb,'YTick',1:numel(resultsStruct.(varNames{j}).bestParams))
                         view(2)
@@ -814,8 +878,10 @@ try
                     end
 
                     % Save Animation
-%                     u.Value = freqList(k_freq);
-%                     u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
+                    if freqBar
+                        u.Value = freqList(k_freq);
+                        u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
+                    end
                     drawnow
 
                     % method 1 using getframe
