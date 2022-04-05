@@ -19,17 +19,17 @@ if ~isempty(subFolders)
 else
     Folders = {originalPath};
 end
+    
+% Make our output struct
+outStruct = struct;
 
-% Issue wrapper which allows script to continue if there is an empty
-% directory, or other issue during processing.
-try
-    
-    % Make our output struct
-    outStruct = struct;
-    
-    % Begin looping through the directories or files
-    for i_dir = 1:length(Folders)
+% Begin looping through the directories or files
+for i_dir = 1:length(Folders)
         
+    % Issue wrapper which allows script to continue if there is an empty
+    % directory, or other issue during processing.
+    try
+    
         fprintf('\nProcessing Directory %d of %d\n\n',i_dir,length(Folders));
         
         path = Folders{i_dir};
@@ -168,20 +168,20 @@ try
         
         clearvars resultsStruct varNames dirLabel
         
+    catch ERROR
+        
+        fprintf('ERROR Clustering Directory #%d of %d\n',i_dir,length(Folders));
+        fprintf('The identifier was:\n%s',ERROR.identifier);
+        fprintf('Message:%s\n',ERROR.message);
+        fprintf('Line Number:%d\n',ERROR.stack(end).line);
+        fprintf('Skipping to next directory...\n');
+        
     end
     
-    % Save the summary file
-    save([originalPath filesep 'ClusterSummaryData_' saveLabel],'-struct','outStruct','-v7.3');
-
-catch ERROR
-        
-    fprintf('ERROR Clustering Directory #%d of %d\n',i_dir,length(Folders));
-    fprintf('The identifier was:\n%s',ERROR.identifier);
-    fprintf('Message:%s\n',ERROR.message);
-    fprintf('Line Number:%d\n',ERROR.stack(end).line);
-    fprintf('Skipping to next directory...\n');
-
 end
+
+% Save the summary file
+save([originalPath filesep 'ClusterSummaryData_' saveLabel],'-struct','outStruct','-v7.3');
 
 end
 

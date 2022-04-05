@@ -84,14 +84,14 @@ else
     poolobj = parpool('IdleTimeout', 120);
     parallelSet = true;
 end
-
-% Issue wrapper which allows script to continue if there is an empty
-% directory, or other issue during processing.
-try
     
-    % Begin looping through the directories or files
-    for i_dir = 1:length(Folders)
-        
+% Begin looping through the directories or files
+for i_dir = 1:length(Folders)
+
+    % Issue wrapper which allows script to continue if there is an empty
+    % directory, or other issue during processing.
+    try
+    
         path = Folders{i_dir};
         
         % Load all of the force curves available in our directory!
@@ -358,15 +358,15 @@ try
         temp = strsplit(path,{filesep});
         save([path filesep 'ClusteringResults-' temp{end} '-' saveLabel],'-struct','clusterResults','-v7.3');
 
-    end
-            
-catch ERROR
+    catch ERROR
         
-    fprintf('ERROR Clustering Directory #%d of %d\n',i_dir,length(Folders));
-    fprintf('The identifier was:\n%s',ERROR.identifier);
-    fprintf('Message:%s\n',ERROR.message);
-    fprintf('Line Number:%d\n',ERROR.stack(end).line);
-    fprintf('Skipping to next directory...\n');
+        fprintf('ERROR Clustering Curves in Directory #%d of %d\n',i_dir,length(Folders));
+        fprintf('The identifier was:\n%s',ERROR.identifier);
+        fprintf('Message:%s\n',ERROR.message);
+        fprintf('Line Number:%d\n',ERROR.stack(end).line);
+        fprintf('Skipping to next directory...\n');
+        
+    end
 
 end
 

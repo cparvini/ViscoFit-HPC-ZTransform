@@ -86,14 +86,14 @@ end
 % Define error functions
 sse_global = @(data,model) sum((data-model).^2,'all');
 mse_global = @(data,model,n) sum((data-model).^2,'all')./(length(data)-n);
-
-% Issue wrapper which allows script to continue if there is an empty
-% directory, or other issue during processing.
-try
     
-    % Begin looping through the directories or files
-    for i_dir = 1:length(Folders)
-        
+% Begin looping through the directories or files
+for i_dir = 1:length(Folders)
+
+    % Issue wrapper which allows script to continue if there is an empty
+    % directory, or other issue during processing.
+    try
+    
         fprintf('\nBeginning Tomographic Mapping for Directory #%d of %d\n',i_dir,length(Folders));
         
         path = Folders{i_dir};
@@ -932,19 +932,19 @@ try
 
         end
         
-        fprintf('Tomographic Maps Complete for Directory #%d of %d\n',i_dir,length(Folders));
+        fprintf('Tomographic Mapping Complete for Directory #%d of %d\n',i_dir,length(Folders));
 
-    end
-    
-catch ERROR
+    catch ERROR
         
-    fprintf('ERROR Creating Tomographic Maps for Directory #%d of %d\n',i_dir,length(Folders));
-    fprintf('The identifier was:\n%s',ERROR.identifier);
-    fprintf('Message:%s\n',ERROR.message);
-    fprintf('Line Number:%d\n',ERROR.stack(end).line);
-    fprintf('Skipping to next directory...\n');
+        fprintf('ERROR Creating Tomographic Maps for Directory #%d of %d\n',i_dir,length(Folders));
+        fprintf('The identifier was:\n%s',ERROR.identifier);
+        fprintf('Message:%s\n',ERROR.message);
+        fprintf('Line Number:%d\n',ERROR.stack(end).line);
+        fprintf('Skipping to next directory...\n');    
+    
+    end
 
 end
-    
+
 end
 
