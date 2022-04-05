@@ -1,7 +1,7 @@
-function [] = makeZAnimation(originalPath,varargin)
-%makeAnimation Create an Animation using Z-Transform Method
-%   This function takes in a path argument and will subsequently create an
-%   animation showing the viscoelastic properties from a Z-Transform
+function [] = makeZTomography(originalPath,nPlanes,varargin)
+%makeZTomography Create a 3D Tomographic Volume using Z-Transform Method
+%   This function takes in a path argument and will subsequently create a
+%   3D Volume showing the viscoelastic properties from a Z-Transform
 %   Results file. The results file is created using either the
 %   "analyze_map_zTransform" function or "fit_map_zTransform".
 
@@ -10,10 +10,7 @@ correctTilt = true;
 hideSubstrate = true;
 zeroSubstrate = true;
 fillPixels = true;
-plotIndentation = true;
-logSteps = true;
-freqBar = false;
-showLabels = false;
+showLabels = true;
 climMax = 2e5;
 if nargin > 1
     if ~isempty(varargin)
@@ -37,55 +34,40 @@ if nargin > 1
                     end
                 case 5
                     if ~isempty(varargin{i})
-                        plotIndentation = varargin{i};                        
-                    end
-                case 6
-                    if ~isempty(varargin{i})
-                        logSteps = varargin{i};                        
-                    end
-                case 7
-                    if ~isempty(varargin{i})
-                        freqBar = varargin{i};                        
-                    end
-                case 8
-                    if ~isempty(varargin{i})
                         showLabels = varargin{i};                        
                     end
-                case 9
+                case 6
                     if ~isempty(varargin{i})
                         if isa(varargin{i},'numeric')
                             climMax = varargin{i};
                         else
                             climMax = 2e5; % Pa
-                            warning('You provided a non-numeric input for the stiffness plot limit to makeZAnimation(). Using the default value instead (2e5 Pa)');
+                            warning('You provided a non-numeric input for the stiffness plot limit to makeZTomography(). Using the default value instead (2e5 Pa)');
                         end
                     end
                 otherwise
-                    fprintf('Passed additional parameters to fit_map() which were not used.');
+                    fprintf('Passed additional parameters to makeZTomography() which were not used.');
             end
         end
     end
 end
 
 % Permanent Settings
-errortype = 'sse';    
+errortype = 'sse';
+plotModelAlways = false;
 figX = 0;
 figY = 0;
-nTicks = 5;
 maxCol = 5;
 maxwid = get(0,'screensize');
+maxheight = maxwid(4);
 maxwid = maxwid(3);
 mapColorName = 'turbo';
 boxSetting = 'on';
 hardClim = true;
-climHeight = 15e-6; % meters, the JPK Nanowizard has a 15um piezo 
-climInd = 1000e-9; % meters
+zMax = 15e-6; % meters, the JPK Nanowizard has a 15um piezo 
 stiffMax = 10*climMax; % Pa
 trimHeight = 100e-9;
-dFreq = 200; % Hz, step size between frames
-n_frames = 100; % frames, number of frames per order of magnitude
 n_datapoints = 10;
-fps = 15;
 
 % Check to see if there are subdirectories
 dirContents = dir(originalPath);
@@ -112,7 +94,7 @@ try
     % Begin looping through the directories or files
     for i_dir = 1:length(Folders)
         
-        fprintf('\nBeginning Animation for Directory #%d of %d\n',i_dir,length(Folders));
+        fprintf('\nBeginning Tomographic Mapping for Directory #%d of %d\n',i_dir,length(Folders));
         
         path = Folders{i_dir};
         Files = dir([path filesep '*Results*zTransform*.mat']);
@@ -162,6 +144,7 @@ try
                 
                 minFreq = Inf;
                 maxFreq = 0;
+                dFreqAll = NaN(numel(resultsStruct.(varNames{j}).frequencyMap),1);
                 for k_pixels = 1:numel(resultsStruct.(varNames{j}).frequencyMap)
                     tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                     tempf = tempf(tempf>0);
@@ -172,6 +155,7 @@ try
                     if temp < minFreq
                         minFreq = temp;
                     end
+                    dFreqAll(k_pixels) = median(gradient(tempf));
                     tempf = resultsStruct.(varNames{j}).frequencyMap{k_pixels};
                     tempf = tempf(tempf>0);
                     [temp,~] = max(tempf,[],'omitnan');
@@ -188,62 +172,31 @@ try
                 tempf = minFreq;
                 tempmax = 10^ceil(log10(minFreq));
                 magList = [];
-                if ~logSteps
-                    while temp < maxFreq
-                        tempf = 10.^( ( log10(temp) ) );
-                        magList = horzcat(magList,tempf);
-                        temp = temp + dFreq;
-                    end
-                else
-                    while temp < maxFreq
-                        if temp == minFreq
-                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_frames);
-                        end
-
-                        if temp >= tempmax
-                            tempmax = temp*10;
-                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_frames);
-                        end
-
-                        tempf = 10.^( ( log10(temp) ) );
-                        magList = horzcat(magList,tempf);
-                        temp = temp + dFreq;
-                    end
+                dFreq = round(mean(dFreqAll,'omitnan'));
+                while temp < maxFreq
+                    tempf = 10.^( ( log10(temp) ) );
+                    magList = horzcat(magList,tempf);
+                    temp = temp + dFreq;
                 end
                 magList = unique(magList);
+                timeList = flip(1./(magList));
                 freqList = flip(magList);
-
-                if isfield(resultsStruct.(varNames{j}),'bestParams')
+                
+                if isfield(resultsStruct.(varNames{j}),'bestParams') && plotModelAlways
                     plotModel = true;
                 else
                     plotModel = false;
                 end
 
-                n_plots = 4+plotModel+plotIndentation;
-                n_rows = ceil(n_plots/maxCol);
-                n_cols = min([n_plots maxCol]);              
-                mult = min([400 maxwid/n_cols]);
-                figWid = mult*n_cols;
-                figHeight = max([mult*n_rows figWid/n_plots]);
+                figWid = min([maxwid maxheight]);
+                figHeight = figWid;
 
                 if plotModel
                     mapType = '-Model';
                 else
                     mapType = '-Raw';
                 end
-
-                M = struct('cdata', cell(1,numel(freqList)), ...
-                    'colormap', cell(1,numel(freqList)));
-
-                gifFile = [path filesep fileLabels{j_dir} '-MapAnimation-' varNames{j}...
-                    mapType '.gif'];
-%                 movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
-%                     mapType '.mp4'];
-
-                % Can't render mp4 on linux cluster
-                movieFile = [path filesep fileLabels{j_dir} '-MapMovie-' varNames{j}...
-                    mapType '.avi'];
-
+                
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 if correctTilt
                     pixelHeightArray = cell2mat(fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate));
@@ -306,59 +259,44 @@ try
                 lossMax = 10^(ceil(log10(lossMax)));
                 relaxMax = 10^(ceil(log10(relaxMax)));
                 
-                for k_freq = 1:numel(freqList)
-
-                    % Prep the movie
-                    % Clear old figures if they exist
-                    if ~exist('mapPlotWindow','var')
+                % Make blank map data
+                mapDataStorage = NaN([flip(mapSize) numel(timeList)]);
+                mapDataLoss = NaN([flip(mapSize) numel(timeList)]);
+                mapDataAngle = NaN([flip(mapSize) numel(timeList)]);
+                mapDataRelaxance = NaN([flip(mapSize) numel(timeList)]);
+                mapDataError = NaN([flip(mapSize) numel(timeList)]);
+                mapDataTerms = NaN([flip(mapSize) numel(timeList)]);
+                mapDataHeight = NaN([flip(mapSize) numel(timeList)]);
+                mapDataInd = NaN([flip(mapSize) numel(timeList)]);
+                
+                % Prep the movie
+                % Clear old figures if they exist
+                if ~exist('mapPlotWindow','var')
+                    mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+                else
+                    try
+                        figure(mapPlotWindow)
+                        clf
+                    catch
                         mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-                    else
-                        try
-                            figure(mapPlotWindow)
-                            clf
-                        catch
-                            mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-                        end
                     end
-
+                end
+                
+                progressString = sprintf('Populating Tomographic Dataset\nParallel Analysis Running...');
+                hbar = parfor_progressbar(numel(timeList),progressString);
+                warning('off');
+                
+                parfor k_t = 1:numel(timeList)
+                    % Create temporary holders
+                    mapDataStorageTemp = NaN(flip(mapSize));
+                    mapDataLossTemp = NaN(flip(mapSize));
+                    mapDataAngleTemp = NaN(flip(mapSize));
+                    mapDataRelaxanceTemp = NaN(flip(mapSize));
+                    mapDataErrorTemp = NaN(flip(mapSize));
+                    mapDataTermsTemp = NaN(flip(mapSize));
+                    mapDataHeightTemp = NaN(flip(mapSize));
+                    mapDataIndTemp = NaN(flip(mapSize));
                     
-                    if freqBar
-                        % Original, using uicontrols
-                        u = uicontrol(mapPlotWindow,'Style','slider');
-                        u.Position = [20 15 figWid-230 20];
-                        u.Max = max(freqList);
-                        u.Min = min(freqList);
-                        u.Value = freqList(1);
-                        u2 = uicontrol(mapPlotWindow,'Style','edit');
-                        u2.Position = [figWid-175 10 150 40];
-                        u2.String = [num2str(round(freqList(1))) ' Hz'];
-                        u2.FontSize = 16;
-                    else
-                        % Method 2, using annotation
-                        pos = [figWid-175 10 150 25];
-                        str = [num2str(round(freqList(k_freq))) ' Hz'];
-                        annotation('textbox',...
-                            'Units','pixels',...
-                            'Position',pos,...
-                            'String',str,...
-                            'FitBoxToText','on',...
-                            'BackgroundColor','white',...
-                            'HorizontalAlignment','center',...
-                            'VerticalAlignment','middle',...
-                            'FontSize',16);
-                    end
-
-                    % Make blank map data
-                    mapDataStorage = NaN(flip(mapSize));
-                    mapDataLoss = NaN(flip(mapSize));
-                    mapDataAngle = NaN(flip(mapSize));
-                    mapDataRelaxance = NaN(flip(mapSize));
-                    mapDataError = NaN(flip(mapSize));
-                    mapDataTerms = NaN(flip(mapSize));
-                    mapDataHeight = NaN(flip(mapSize));
-                    mapDataInd = NaN(flip(mapSize));
-                    heightImg = zeros(flip(mapSize));
-
                     % Position for the map
                     xc = 1;
                     yc = 0;
@@ -372,7 +310,7 @@ try
 
                         for i_z = 1:numel(F_hz_all)
 
-                            if hideSubstrate && any(ismember(k_pixels,pixelSkip))
+                            if hideSubstrate && any(ismember(i_z,pixelSkip))
                                 F_hz_all{i_z} = NaN;
                                 h_hz_all{i_z} = NaN;
                                 continue;
@@ -389,7 +327,7 @@ try
                                 resultsStruct.(varNames{j}).ViscoClass.thinSample,...
                                 resultsStruct.(varNames{j}).ViscoClass.pixelHeight_cell{i_z}};
 
-                            if any(cellfun(@isempty,dataIn(1:6))) || any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
+                            if any(cellfun(@isempty,dataIn(1:6))) || any(isnan(resultsStruct.(varNames{j}).frequencyMap{i_z}))
                                 F_hz_all{i_z} = NaN;
                                 h_hz_all{i_z} = NaN;
                                 continue;
@@ -400,17 +338,17 @@ try
                         end
 
                     end
-
-                    heightImg = reshape(pixelHeightArray,mapSize);
-
-                    for k_pixels = 1:numel(mapDataStorage)
+                    
+                    for k_pixels = 1:numel(mapDataStorageTemp)
 
                         % Get the current pixel position
                         if xc > mapSize(1)
                             xc = 1;
                             yc = yc + 1;
                         end
-                        idx_pixel = sub2ind(flip(mapSize),mapSize(2)-yc,xc);
+                        
+%                         idx_pixel = sub2ind([flip(mapSize) size(mapDataStorage,3)],mapSize(2)-yc,xc,k_t);
+                        idx_pixel_slice = sub2ind(flip(mapSize),mapSize(2)-yc,xc);
 
                         if any(isnan(resultsStruct.(varNames{j}).frequencyMap{k_pixels}))
                             xc = xc + 1;
@@ -559,46 +497,45 @@ try
 
                             modelRelaxance = modelStorage + 1j*modelLoss;
 
-                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq) < 2
-                                mapDataStorage(idx_pixel) = NaN;
-                                mapDataLoss(idx_pixel) = NaN;
-                                mapDataAngle(idx_pixel) = NaN;
-                                mapDataRelaxance(idx_pixel) = NaN;
-                                mapDataError(idx_pixel) = NaN;
-                                mapDataTerms(idx_pixel) = NaN;
-                                mapDataHeight(idx_pixel) = NaN;
-                                mapDataInd(idx_pixel) = NaN;
+                            if (freqList(k_t) > max(freq,[],'omitnan')) || (freqList(k_t) < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq) < 2
+                                mapDataStorageTemp(idx_pixel_slice) = NaN;
+                                mapDataLossTemp(idx_pixel_slice) = NaN;
+                                mapDataAngleTemp(idx_pixel_slice) = NaN;
+                                mapDataRelaxanceTemp(idx_pixel_slice) = NaN;
+                                mapDataErrorTemp(idx_pixel_slice) = NaN;
+                                mapDataTermsTemp(idx_pixel_slice) = NaN;
+                                mapDataHeightTemp(idx_pixel_slice) = NaN;
+                                mapDataIndTemp(idx_pixel_slice) = NaN;
                                 xc = xc + 1;
                             else
                                 % Resample to known array of frequencies
-                                if hideSubstrate && (max([interp1(freq,modelStorage,freqList(k_freq),'makima',...
-                                    NaN) interp1(freq,modelLoss,freqList(k_freq),'makima',...
+                                if hideSubstrate && (max([interp1(freq,modelStorage,1./timeList(k_t),'makima',...
+                                    NaN) interp1(freq,modelLoss,1./timeList(k_t),'makima',...
                                     NaN) 0],[],'omitnan') > stiffMax)
 
                                     xc = xc + 1;
                                     continue;
                                 end
 
-                                mapDataStorage(idx_pixel) = interp1(freq,modelStorage,freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataLoss(idx_pixel) = interp1(freq,modelLoss,freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataAngle(idx_pixel) = interp1(freq,modelAngle,freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataRelaxance(idx_pixel) = interp1(freq,modelRelaxance,freqList(k_freq),'makima',...
-                                    NaN);
-
-                                % Has to be from the time domain
-                                % (normalization issues)
-                                evalPt = 1./(freqList(k_freq));
+                                % Create our arrays in the time domain
                                 t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
                                 h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-                                mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
+                                mapDataIndTemp(idx_pixel_slice) = interp1(t_t,h_t,timeList(k_t),'makima',...
                                     1e-12);
-
-                                mapDataError(idx_pixel) = modelErrorTime;
-                                mapDataTerms(idx_pixel) = bestidx;
-                                mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+                                
+                                evalPt = 1/timeList(k_t);
+                                mapDataStorageTemp(idx_pixel_slice) = interp1(freq,modelStorage,evalPt,'makima',...
+                                    NaN);
+                                mapDataLossTemp(idx_pixel_slice) = interp1(freq,modelLoss,evalPt,'makima',...
+                                    NaN);
+                                mapDataAngleTemp(idx_pixel_slice) = interp1(freq,modelAngle,evalPt,'makima',...
+                                    NaN);
+                                mapDataRelaxanceTemp(idx_pixel_slice) = interp1(freq,modelRelaxance,evalPt,'makima',...
+                                    NaN);
+                                
+                                mapDataErrorTemp(idx_pixel_slice) = modelErrorTime;
+                                mapDataTermsTemp(idx_pixel_slice) = bestidx;
+                                mapDataHeightTemp(idx_pixel_slice) = pixelHeightArray(idx_pixel_slice);
                                 xc = xc + 1;
                             end
 
@@ -611,352 +548,397 @@ try
                             modelAngle = atand(modelLoss./modelStorage);
                             modelRelaxance = resultsStruct.(varNames{j}).relaxanceMap{k_pixels};
 
-                            if (freqList(k_freq) > max(freq,[],'omitnan')) || (freqList(k_freq) < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq((freq >= min(freqList)) & (freq <= max(freqList)))) < 2
-                                mapDataStorage(idx_pixel) = NaN;
-                                mapDataLoss(idx_pixel) = NaN;
-                                mapDataAngle(idx_pixel) = NaN;
-                                mapDataRelaxance(idx_pixel) = NaN;
-                                mapDataHeight(idx_pixel) = NaN;
-                                mapDataInd(idx_pixel) = NaN;
+                            if (1/timeList(k_t) > max(freq,[],'omitnan')) || (1/timeList(k_t) < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq((freq >= min(freqList)) & (freq <= max(freqList)))) < 2
+                                
+                                mapDataStorageTemp(idx_pixel_slice) = NaN;
+                                mapDataLossTemp(idx_pixel_slice) = NaN;
+                                mapDataAngleTemp(idx_pixel_slice) = NaN;
+                                mapDataRelaxanceTemp(idx_pixel_slice) = NaN;
+                                mapDataHeightTemp(idx_pixel_slice) = NaN;
+                                mapDataIndTemp(idx_pixel_slice) = NaN;
                                 xc = xc + 1;
+                                
                             else
 
-    %                                 [~,idx] = min(abs(freq-freqList(k_freq)));                                
                                 % Resample to known array of frequencies
                                 ids = ((freq >= min(freqList)) & (freq <= max(freqList)));
 
-                                if hideSubstrate && (max([interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
-                                    NaN) interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
+                                if hideSubstrate && (max([interp1(freq(ids),modelStorage(ids),1/timeList(k_t),'makima',...
+                                    NaN) interp1(freq(ids),modelLoss(ids),1/timeList(k_t),'makima',...
                                     NaN) 0],[],'omitnan') > stiffMax)
 
                                     xc = xc + 1;
                                     continue;
                                 end
-
-                                mapDataStorage(idx_pixel) = interp1(freq(ids),modelStorage(ids),freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataLoss(idx_pixel) = interp1(freq(ids),modelLoss(ids),freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataAngle(idx_pixel) = interp1(freq(ids),modelAngle(ids),freqList(k_freq),'makima',...
-                                    NaN);
-                                mapDataRelaxance(idx_pixel) = interp1(freq(ids),modelRelaxance(ids),freqList(k_freq),'makima',...
-                                    NaN);
                                 
                                 % Has to be from the time domain
                                 % (normalization issues)
-                                evalPt = 1./(freqList(k_freq));
                                 t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
                                 h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-                                mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
+                                mapDataIndTemp(idx_pixel_slice) = interp1(t_t,h_t,timeList(k_t),'makima',...
                                     1e-12);
+                                
+                                evalPt = 1./timeList(k_t);
+                                mapDataStorageTemp(idx_pixel_slice) = interp1(freq(ids),modelStorage(ids),evalPt,'makima',...
+                                    NaN);
+                                mapDataLossTemp(idx_pixel_slice) = interp1(freq(ids),modelLoss(ids),evalPt,'makima',...
+                                    NaN);
+                                mapDataAngleTemp(idx_pixel_slice) = interp1(freq(ids),modelAngle(ids),evalPt,'makima',...
+                                    NaN);
+                                mapDataRelaxanceTemp(idx_pixel_slice) = interp1(freq(ids),modelRelaxance(ids),evalPt,'makima',...
+                                    NaN);
 
-                                mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+                                mapDataHeightTemp(idx_pixel_slice) = pixelHeightArray(idx_pixel_slice);
                                 xc = xc + 1;
                             end
 
                         end
 
+                        if fillPixels
+                            % Perform Interpolation of non-viable pixels
+                            % Start by creating masks for the pixels to fill
+                            [m, n] = size(mapDataHeight(:,:,k_t));
+                            neighbors4 = [-1, 1, m, -m];
+                            neighbors8 = [neighbors4, -m-1, -m+1, m-1, m+1];
+                            f4 = @(padimg,ind) mean(padimg(ind + neighbors4),"omitnan");
+                            f8 = @(padimg,ind) mean(padimg(ind + neighbors8),"omitnan");
+
+                            storageTemp = mapDataStorage(:,:,k_t);
+                            storageTemp(pixelSkip) = 0;
+                            paddedStorage = padarray(storageTemp, [1 1], 0, 'both');
+
+                            lossTemp = mapDataLoss(:,:,k_t);
+                            lossTemp(pixelSkip) = 0;
+                            paddedLoss = padarray(lossTemp, [1 1], 0, 'both');
+
+                            angleTemp = mapDataAngle(:,:,k_t);
+                            angleTemp(pixelSkip) = 0;
+                            paddedAngle = padarray(angleTemp, [1 1], 0, 'both');
+
+                            % Storage Modulus Interpolation
+                            originalNaNPos = find(isnan(storageTemp));
+                            paddedImageNaNs = find(isnan(paddedStorage));
+                            imglocav = storageTemp;
+
+                            while nnz(isnan(imglocav)) > 0
+                                originalNaNPos = find(isnan(imglocav));
+                                for ii = 1:numel(originalNaNPos)
+                                    imglocav(originalNaNPos(ii)) = f8(paddedStorage,paddedImageNaNs(ii));
+                                end
+                            end
+
+                            storageTemp(originalNaNPos) = imglocav(originalNaNPos);
+                            mapDataStorage(:,:,k_t) = storageTemp;
+
+                            % Loss Modulus Interpolation
+                            originalNaNPos = find(isnan(lossTemp));
+                            paddedImageNaNs = find(isnan(paddedLoss));
+                            imglocav = lossTemp;
+
+                            while nnz(isnan(imglocav)) > 0
+                                originalNaNPos = find(isnan(imglocav));
+                                for ii = 1:numel(originalNaNPos)
+                                    imglocav(originalNaNPos(ii)) = f8(paddedLoss,paddedImageNaNs(ii));
+                                end
+                            end
+
+                            lossTemp(originalNaNPos) = imglocav(originalNaNPos);
+                            mapDataLoss(:,:,k_t) = lossTemp;
+                            
+                            % Loss Angle Interpolation
+                            originalNaNPos = find(isnan(angleTemp));
+                            paddedImageNaNs = find(isnan(paddedAngle));
+                            imglocav = angleTemp;
+
+                            while nnz(isnan(imglocav)) > 0
+                                originalNaNPos = find(isnan(imglocav));
+                                for ii = 1:numel(originalNaNPos)
+                                    imglocav(originalNaNPos(ii)) = f8(paddedAngle,paddedImageNaNs(ii));
+                                end
+                            end
+
+                            angleTemp(originalNaNPos) = imglocav(originalNaNPos);
+                            mapDataAngle(:,:,k_t) = angleTemp;
+                            
+                        end
+                        
                     end
-
-                    if fillPixels
-                        % Perform Interpolation of non-viable pixels
-                        % Start by creating masks for the pixels to fill
-                        [m, n] = size(mapDataHeight);
-                        neighbors4 = [-1, 1, m, -m];
-                        neighbors8 = [neighbors4, -m-1, -m+1, m-1, m+1];
-                        f4 = @(padimg,ind) mean(padimg(ind + neighbors4),"omitnan");
-                        f8 = @(padimg,ind) mean(padimg(ind + neighbors8),"omitnan");
-
-                        storageTemp = mapDataStorage;
-                        storageTemp(pixelSkip) = 0;
-                        paddedStorage = padarray(storageTemp, [1 1], 0, 'both');
-
-                        lossTemp = mapDataLoss;
-                        lossTemp(pixelSkip) = 0;
-                        paddedLoss = padarray(lossTemp, [1 1], 0, 'both');
-
-                        angleTemp = mapDataAngle;
-                        angleTemp(pixelSkip) = 0;
-                        paddedAngle = padarray(angleTemp, [1 1], 0, 'both');
-
-                        % Storage Modulus Interpolation
-                        originalNaNPos = find(isnan(storageTemp));
-                        paddedImageNaNs = find(isnan(paddedStorage));
-                        imglocav = storageTemp;
-
-                        while nnz(isnan(imglocav)) > 0
-                            originalNaNPos = find(isnan(imglocav));
-                            for ii = 1:numel(originalNaNPos)
-                                imglocav(originalNaNPos(ii)) = f8(paddedStorage,paddedImageNaNs(ii));
-                            end
-                        end
-
-                        mapDataStorage(originalNaNPos) = imglocav(originalNaNPos);
-
-                        % Loss Modulus Interpolation
-                        originalNaNPos = find(isnan(lossTemp));
-                        paddedImageNaNs = find(isnan(paddedLoss));
-                        imglocav = lossTemp;
-
-                        while nnz(isnan(imglocav)) > 0
-                            originalNaNPos = find(isnan(imglocav));
-                            for ii = 1:numel(originalNaNPos)
-                                imglocav(originalNaNPos(ii)) = f8(paddedLoss,paddedImageNaNs(ii));
-                            end
-                        end
-
-                        mapDataLoss(originalNaNPos) = imglocav(originalNaNPos);
-
-                        % Loss Angle Interpolation
-                        originalNaNPos = find(isnan(angleTemp));
-                        paddedImageNaNs = find(isnan(paddedAngle));
-                        imglocav = angleTemp;
-
-                        while nnz(isnan(imglocav)) > 0
-                            originalNaNPos = find(isnan(imglocav));
-                            for ii = 1:numel(originalNaNPos)
-                                imglocav(originalNaNPos(ii)) = f8(paddedAngle,paddedImageNaNs(ii));
-                            end
-                        end
-
-                        mapDataAngle(originalNaNPos) = imglocav(originalNaNPos);
-
-                    end
-
-                    mapDataStorage(mapDataStorage == 0) = NaN;
-                    mapDataLoss(mapDataLoss == 0) = NaN;
-                    mapDataAngle(mapDataAngle == 0) = NaN;
-                    mapDataRelaxance(mapDataRelaxance == 0) = NaN;
-                    mapDataInd(mapDataInd == 0) = NaN;
                     
-                    if exist('XA','var') && exist('YA','var')
-                        XPlot = XA./1e-6;
-                        xlab = sprintf('X Position [\\mum]');
-                        xlims = [0 max(scanSize)./1e-6];
-                        YPlot = YA./1e-6;
-                        ylab = sprintf('Y Position [\\mum]');
-                        ylims = [0 max(scanSize)./1e-6];
-                    else
-                        XPlot = X;
-                        xlab = 'X Index';
-                        xlims = [1 max(mapSize)];
-                        YPlot = Y;
-                        ylab = 'Y Index';
-                        ylims = [1 max(mapSize)];
+                    % Data Output
+                    mapDataStorage(:,:,k_t) = mapDataStorageTemp;
+                    mapDataLoss(:,:,k_t) = mapDataLossTemp;
+                    mapDataAngle(:,:,k_t) = mapDataAngleTemp;
+                    mapDataRelaxance(:,:,k_t) = mapDataRelaxanceTemp;
+                    mapDataError(:,:,k_t) = mapDataErrorTemp;
+                    mapDataTerms(:,:,k_t) = mapDataTermsTemp;
+                    mapDataHeight(:,:,k_t) = mapDataHeightTemp;
+                    mapDataInd(:,:,k_t) = mapDataIndTemp;
+                    
+                    hbar.iterate(1) % Increase progressbar by 1 iteration
+                end
+                
+                close(hbar)
+                warning('on');
+                
+                mapDataStorage(mapDataStorage == 0) = NaN;
+                mapDataLoss(mapDataLoss == 0) = NaN;
+                mapDataAngle(mapDataAngle == 0) = NaN;
+                mapDataRelaxance(mapDataRelaxance == 0) = NaN;
+                mapDataInd(mapDataInd == 0) = NaN;
+                
+                if exist('XA','var') && exist('YA','var')
+                    XPlot = XA./1e-6;
+                    xlab = sprintf('X Position [\\mum]');
+                    xlims = [0 max(scanSize)./1e-6];
+                    YPlot = YA./1e-6;
+                    ylab = sprintf('Y Position [\\mum]');
+                    ylims = [0 max(scanSize)./1e-6];
+                    zlab = sprintf('Z Position [\\mum]');
+                    zlims = [0 zMax./1e-6];
+                    zscale = 1e6;
+                else
+                    XPlot = X;
+                    xlab = 'X Index';
+                    xlims = [1 max(mapSize)];
+                    YPlot = Y;
+                    ylab = 'Y Index';
+                    ylims = [1 max(mapSize)];
+                    zlab = 'Z Index';
+                    zlims = [0 zMax./1e-6];
+                    zscale = 1;
+                end
+                
+                % Find our slice locations
+                switch nPlanes
+                    case 0
+                        xslice = [];
+                        yslice = [];
+                        zslice = [];
+                        
+                    case 1
+                        xslice = (xlims(2)-xlims(1))/2;
+                        yslice = (ylims(2)-ylims(1))/2;
+                        zslice = [];
+                        
+                    otherwise
+                        xslice = linspace(xlims(1),xlims(2),nPlanes);
+                        yslice = linspace(ylims(1),ylims(2),nPlanes);
+                        zslice = [];
+                end
+
+                for i_plot = 1:4
+
+                    figure(mapPlotWindow)
+                    clf
+                    
+                    switch i_plot
+                        case 1
+                            mapData = mapDataStorage;
+                            plotTitle = 'Storage Modulus';
+                            maxScale = storMax;
+                            saveLabel = 'Storage';
+                            
+                        case 2
+                            mapData = mapDataLoss;
+                            plotTitle = 'Loss Modulus';
+                            maxScale = lossMax;
+                            saveLabel = 'Loss';
+                            
+                        case 3
+                            mapData = mapDataAngle;
+                            plotTitle = 'Loss Angle';
+                            maxScale = 90;
+                            saveLabel = 'Angle';
+                            
+                        case 4
+                            mapData = abs(mapDataRelaxance);
+                            plotTitle = 'Relaxance';
+                            maxScale = relaxMax;
+                            saveLabel = 'Relaxance';
+                            
                     end
 
-                    tiledlayout(n_rows,n_cols, 'padding', 'none', ...
-                        'TileSpacing', 'compact', ...
-                        'OuterPosition', [0 0.15 1 0.85])
-
-                    ax = nexttile;
-
-                    surf(XPlot,YPlot,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
-                    colormap(ax,'turbo')
+                    for j_plot = 1:size(mapData,3)
+                        
+                        tempX = XPlot;
+                        tempY = YPlot;
+                        tempZ = zscale*(mapDataHeight(:,:,j_plot)-mapDataInd(:,:,j_plot));
+                        tempV = mapData(:,:,j_plot);
+                        
+                        xbest = NaN(nPlanes,1);
+                        ybest = NaN(nPlanes,1);
+                        for k_plot = 1:nPlanes
+                            [~,xbest(k_plot)] = min(abs(tempX(1,:)-xslice(k_plot)));
+                            [~,ybest(k_plot)] = min(abs(tempY(:,1)-yslice(k_plot)));
+                        end
+                        idslice = (ismember(tempX,tempX(1,xbest))) | (ismember(tempY,tempY(ybest,1)));
+                        tempX(~idslice) = NaN;
+                        tempY(~idslice) = NaN;
+                        tempZ(~idslice) = NaN;
+                        tempV(~idslice) = NaN;
+                        
+                        hold on
+%                         surf(XPlot(:,:,j_plot),YPlot(:,:,j_plot),mapDataHeight(:,:,j_plot)-mapDataInd(:,:,j_plot),mapData(:,:,j_plot),'EdgeColor','interp')
+                        surf(tempX,tempY,tempZ,tempV,'EdgeColor','interp','FaceColor','none')
+                        hold off
+                        
+                    end
+                    
                     hold on
+                    surf(XPlot,YPlot,zscale*mapDataHeight(:,:,1),max(mapData,[],3),'FaceAlpha',0.3,'EdgeAlpha',0.3)
+                    hold off
+                    
+                    ax = gca;
+                    colormap(ax,mapColorName)
                     box(ax,boxSetting)
-                    title('Topography')
+                    grid minor
+                    title(plotTitle)
                     if showLabels
+                        xlabel(xlab)
                         ylabel(ylab)
-                        xlabel(xlab)
+                        zlabel(zlab)
                     else
-                        set(gca,'YTickLabel',[],'XTickLabel',[])
+                        set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[])
                     end
                     xlim(xlims)
                     ylim(ylims)
+                    zlim(zlims)
                     cb = colorbar;
-                    caxis([0 climHeight]); % Absolute scale
-                    temp = (cb.Ticks' ./ 1e-6);
-                    for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
+                    
+                    switch i_plot
+                        case 1
+                            if ~hardClim
+                                caxis([0 maxScale]); % Absolute scale
+                            else
+                                caxis([0 climMax]);
+                            end
+                            temp = (cb.Ticks' .* 1e-3);
+                            for ii = 1:numel(temp)
+                               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+                            end
+                            
+                        case 2
+                            if ~hardClim
+                                caxis([0 maxScale]); % Absolute scale
+                            else
+                                caxis([0 climMax]);
+                            end
+                            temp = (cb.Ticks' .* 1e-3);
+                            for ii = 1:numel(temp)
+                               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+                            end
+                            
+                        case 3
+                            cb.Ruler.TickLabelFormat='%g Deg';
+                            caxis([0 90]);
+                            
+                        case 4
+                            if ~hardClim
+                                caxis([0 maxScale]); % Absolute scale
+                            else
+                                caxis([0 climMax]);
+                            end
+                            temp = (cb.Ticks' .* 1e-3);
+                            for ii = 1:numel(temp)
+                               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+                            end
+                            
                     end
-                    view(2)
+                    
+                    view(3)
                     pbaspect([1 1 1])
-                    hold off
-
-                    if plotIndentation
-
-                        ax = nexttile;
-
-                        surf(XPlot,YPlot,mapDataHeight,mapDataInd,'EdgeColor','interp')
-                        colormap(ax,'turbo')
-                        hold on
-                        box(ax,boxSetting)
-                        title('Indentation')
-                        if showLabels
-                            xlabel(xlab)
-                        else
-                            set(gca,'YTickLabel',[],'XTickLabel',[])
-                        end
-                        xlim(xlims)
-                        ylim(ylims)
-                        cb = colorbar;
-                        if ~hardClim
-                            caxis([0 indMax]); % Absolute scale
-                        else
-                            caxis([0 climMax]);
-                        end
-                        temp = (cb.Ticks' ./ 1e-9);
-                        for ii = 1:numel(temp)
-                           cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
-                        end
-                        view(2)
-                        pbaspect([1 1 1])
-                        hold off
-
-                    end
-
-                    ax = nexttile;
-
-                    surf(XPlot,YPlot,mapDataHeight,mapDataStorage,'EdgeColor','interp')
-                    colormap(ax,mapColorName)
-                    hold on
-                    box(ax,boxSetting)
-                    title('Storage Modulus')
-                    if showLabels
-                        xlabel(xlab)
-                    else
-                        set(gca,'YTickLabel',[],'XTickLabel',[])
-                    end
-                    xlim(xlims)
-                    ylim(ylims)
-                    cb = colorbar;
-                    if ~hardClim
-                        caxis([0 storMax]); % Absolute scale
-                    else
-                        caxis([0 climMax]);
-                    end
-                    temp = (cb.Ticks' .* 1e-3);
-                    for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-                    end
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    ax = nexttile;
-
-                    surf(XPlot,YPlot,mapDataHeight,mapDataLoss,'EdgeColor','interp')
-                    colormap(ax,mapColorName)
-                    hold on
-                    box(ax,boxSetting)
-                    title('Loss Modulus')
-                    if showLabels
-                        xlabel(xlab)
-                    else
-                        set(gca,'YTickLabel',[],'XTickLabel',[])
-                    end
-                    xlim(xlims)
-                    ylim(ylims)
-                    cb = colorbar;
-                    if ~hardClim
-                        caxis([0 lossMax]); % Absolute scale
-                    else
-                        caxis([0 climMax]);
-                    end
-                    temp = (cb.Ticks' .* 1e-3);
-                    for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-                    end
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    ax = nexttile;
-
-                    surf(XPlot,YPlot,mapDataHeight,mapDataAngle,'EdgeColor','interp')
-                    colormap(ax,mapColorName)
-                    hold on
-                    box(ax,boxSetting)
-                    title('Loss Angle')
-                    if showLabels
-                        xlabel(xlab)
-                    else
-                        set(gca,'YTickLabel',[],'XTickLabel',[])
-                    end
-                    xlim(xlims)
-                    ylim(ylims)
-                    cb = colorbar;
-                    cb.Ruler.TickLabelFormat='%g Deg';
-                    caxis([0 90]);
-                    view(2)
-                    pbaspect([1 1 1])
-                    hold off
-
-                    if plotModel
-                        ax = nexttile;
-
-                        surf(XPlot,YPlot,mapDataHeight,mapDataTerms)
-                        colormap(ax,mapColorName)
-                        colormap(gca,'parula')
-                        hold on
-                        box(ax,boxSetting)
-                        xlim(xlims)
-                        ylim(ylims)
-                        title(sprintf('Number of Terms'))
-                        if showLabels
-                            xlabel(xlab)
-                        else
-                            set(gca,'YTickLabel',[],'XTickLabel',[])
-                        end
-                        cb = colorbar;
-                        set(cb,'YTick',1:numel(resultsStruct.(varNames{j}).bestParams))
-                        view(2)
-                        pbaspect([1 1 1])
-                        hold off
-                    end
-
-                    % Save Animation
-                    if freqBar
-                        u.Value = freqList(k_freq);
-                        u2.String = [num2str(round(freqList(k_freq))) ' Hz'];
-                    end
                     drawnow
-
-                    % method 1 using getframe
-%                     M(k_freq) = getframe(mapPlotWindow);
-
-                    % method 2 using print
-                    cdata = print('-RGBImage','-r120');
-                    M(k_freq) = im2frame(cdata);
+                    
+                    % Create our filename
+                    plotFile = [path filesep fileLabels{j_dir} '-MapTomography-' varNames{j}...
+                        mapType '-' saveLabel];
+                    
+                    % Using Print for Higher Quality
+                    exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
+                    exportgraphics(ax,[plotFile '.png'],'Resolution',300);
 
                 end
 
-                % Make gif
-                for i_mov = 1:numel(M)
-                    frame = M(i_mov);
-                    im = frame2im(frame);
-                    [imind,cm] = rgb2ind(im,256);
-                    if i_mov == 1
-                        imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'Loopcount',inf);
-                    else
-                        imwrite(imind,cm,gifFile,'gif','DelayTime',0.05,'WriteMode','append');
+                if plotModel
+                    
+                    figure(mapPlotWindow)
+                    clf
+                    
+                    mapData = mapDataError;
+                    plotTitle = 'Model Error';
+                    saveLabel = 'ModelError';
+                    
+                    for j_plot = 1:size(mapData,3)
+                        
+                        tempX = XPlot;
+                        tempY = YPlot;
+                        tempZ = zscale*(mapDataHeight(:,:,j_plot)-mapDataInd(:,:,j_plot));
+                        tempV = mapData(:,:,j_plot);
+                        
+                        xbest = NaN(nPlanes,1);
+                        ybest = NaN(nPlanes,1);
+                        for k_plot = 1:nPlanes
+                            [~,xbest(k_plot)] = min(abs(tempX(1,:)-xslice(k_plot)));
+                            [~,ybest(k_plot)] = min(abs(tempY(:,1)-yslice(k_plot)));
+                        end
+                        idslice = (ismember(tempX,tempX(1,xbest))) | (ismember(tempY,tempY(ybest,1)));
+                        tempX(~idslice) = NaN;
+                        tempY(~idslice) = NaN;
+                        tempZ(~idslice) = NaN;
+                        tempV(~idslice) = NaN;
+                        
+                        hold on
+%                         surf(XPlot(:,:,j_plot),YPlot(:,:,j_plot),mapDataHeight(:,:,j_plot)-mapDataInd(:,:,j_plot),mapData(:,:,j_plot),'EdgeColor','interp')
+                        surf(tempX,tempY,tempZ,tempV,'EdgeColor','interp','FaceColor','none')
+                        hold off
+                        
                     end
+                    
+                    hold on
+                    surf(XPlot,YPlot,zscale*mapDataHeight(:,:,1),max(mapData,[],3),'FaceAlpha',0.3,'EdgeAlpha',0.3)
+                    hold off
+                    
+                    ax = gca;
+                    colormap(ax,mapColorName)
+                    box(ax,boxSetting)
+                    title(plotTitle)
+                    if showLabels
+                        xlabel(xlab)
+                        ylabel(ylab)
+                        zlabel(zlab)
+                    else
+                        set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[])
+                    end
+                    xlim(xlims)
+                    ylim(ylims)
+                    zlim(zlims)
+                    colorbar
+                    
+                    view(3)
+                    pbaspect([1 1 1])
+                    drawnow
+                    
+                    % Create our filename
+                    plotFile = [path filesep fileLabels{j_dir} '-MapTomography-' varNames{j}...
+                        mapType '-' saveLabel];
+                    
+                    % Using Print for Higher Quality
+                    exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
+                    exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+                    
                 end
-
-                % Write to mp4
-%                 v = VideoWriter(movieFile,'MPEG-4');
-%                 v.Quality = 100;
-%                 v.FrameRate = fps;
-
-                % Can't render mp4 on linux cluster
-                v = VideoWriter(movieFile,'Motion JPEG AVI');
-                v.FrameRate = fps;
-                open(v);
-                writeVideo(v,M);
-                close(v);
-
+                
             end
 
         end
         
-        fprintf('Animation Complete for Directory #%d of %d\n',i_dir,length(Folders));
+        fprintf('Tomographic Maps Complete for Directory #%d of %d\n',i_dir,length(Folders));
 
     end
     
 catch ERROR
         
-    fprintf('ERROR Animating Directory #%d of %d\n',i_dir,length(Folders));
+    fprintf('ERROR Creating Tomographic Maps for Directory #%d of %d\n',i_dir,length(Folders));
     fprintf('The identifier was:\n%s',ERROR.identifier);
     fprintf('Message:%s\n',ERROR.message);
     fprintf('Line Number:%d\n',ERROR.stack(end).line);

@@ -558,7 +558,7 @@ for k = 1:n_pixels
     trueParams{k} = dataStruct(rowID).trueParams;
     
     % Settings
-    SNR = noiseMag;
+    SNR = noiseMag(1);
     signalPower = sum(dataStruct(rowID).F_r.^2)/numel(dataStruct(rowID).F_r);
     
     switch noiseType
@@ -621,7 +621,69 @@ for k = 1:n_pixels
     end
     
     times{k} = dataStruct(rowID).t_r;
-    indentations{k} = dataStruct(rowID).h_r;
+    
+    if numel(noiseMag) > 1
+        switch noiseType
+            case 'awgn'
+                % white gaussian noise
+                indentations{k} = awgn(dataStruct(rowID).h_r,SNR,'measured');
+
+            case 'pink'
+                temp = dsp.ColoredNoise('pink',numel(dataStruct(rowID).h_r),1);
+                noise = temp();
+                if ~isrow(noise)
+                    noise = noise';
+                end
+                noisePower = sum(noise.^2)/numel(noise);
+                scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+                indentations{k} = dataStruct(rowID).h_r + noise*scaleFactor;
+
+            case 'white'
+                temp = dsp.ColoredNoise('white',numel(dataStruct(rowID).h_r),1);
+                noise = temp();
+                if ~isrow(noise)
+                    noise = noise';
+                end
+                noisePower = sum(noise.^2)/numel(noise);
+                scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+                indentations{k} = dataStruct(rowID).h_r + noise*scaleFactor;
+
+            case 'brown'
+                temp = dsp.ColoredNoise('brown',numel(dataStruct(rowID).h_r),1);
+                noise = temp();
+                if ~isrow(noise)
+                    noise = noise';
+                end
+                noisePower = sum(noise.^2)/numel(noise);
+                scaleFactor = sqrt(signalPower./(noisePower*(10^(SNR/10))));
+                indentations{k} = dataStruct(rowID).h_r + noise*scaleFactor;
+
+            case 'blue'
+                temp = dsp.ColoredNoise('blue',numel(dataStruct(rowID).h_r),1);
+                noise = temp();
+                if ~isrow(noise)
+                    noise = noise';
+                end
+                noisePower = sum(noise.^2)/numel(noise);
+                scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+                indentations{k} = dataStruct(rowID).h_r + noise*scaleFactor;
+
+            case 'purple'
+                temp = dsp.ColoredNoise('purple',numel(dataStruct(rowID).h_r),1);
+                noise = temp();
+                if ~isrow(noise)
+                    noise = noise';
+                end
+                noisePower = sum(noise.^2)/numel(noise);
+                scaleFactor = sqrt(signalPower/(noisePower*(10^(SNR/10))));
+                indentations{k} = dataStruct(rowID).h_r + noise*scaleFactor;
+
+            otherwise
+                indentations{k} = dataStruct(rowID).h_r;
+        end
+    else
+        indentations{k} = dataStruct(rowID).h_r;
+    end
     
     xc = xc + 1;
     
