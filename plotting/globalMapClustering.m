@@ -657,6 +657,7 @@ for i_dir = 1:length(Folders)
         tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
             'Distance',@dtwf,...
             'Replicates',n_reps,...
+            'OnlinePhase','on',...
             'Algorithm','large');
         ids = all(isnan(clusteringDataGlobal),2); % Find excluded pixels
         clusteringDataGlobal(ids,:) = [];
@@ -672,7 +673,7 @@ for i_dir = 1:length(Folders)
 
         fprintf('\nOptimal Number of Bins: %d\n\n',eva.OptimalK);
 
-        idxK = tempfunc(clusteringDataGlobal,eva.OptimalK);
+        [idxK, centroidLocs] = tempfunc(clusteringDataGlobal,eva.OptimalK);
         
         fprintf('Complete!\n');
         
@@ -1288,6 +1289,7 @@ for i_dir = 1:length(Folders)
                 cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
                 resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap = num2cell(idxKtemp');
                 resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap2D = mapDataClusters;
+                resultsStruct.(varNames{j}).clusterData(cid).globalCentroidLocs = centroidLocs;
                 resultsStruct.(varNames{j}).clusterData(cid).lastUpdate = datestr(now);
                 
                 if isfield(resultsStruct.(varNames{j}), 'trueBinsMap')

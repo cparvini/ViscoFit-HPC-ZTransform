@@ -683,7 +683,7 @@ for i_dir = 1:length(Folders)
                 
                 fprintf('\nOptimal Number of Bins: %d\n\n',eva.OptimalK);
                 
-                idxK = tempfunc(clusteringData,eva.OptimalK);
+                [idxK, centroidLocs] = tempfunc(clusteringData,eva.OptimalK);
                 
                 mapDataClusters = NaN(flip(mapSize));
                 for k_cluster = 1:numel(idxK)
@@ -881,6 +881,7 @@ for i_dir = 1:length(Folders)
                 cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
                 resultsStruct.(varNames{j}).clusterData(cid).clusterMap = num2cell(idxK');
                 resultsStruct.(varNames{j}).clusterData(cid).clusterMap2D = mapDataClusters;
+                resultsStruct.(varNames{j}).clusterData(cid).centroidLocs = centroidLocs;
                 resultsStruct.(varNames{j}).clusterData(cid).lastUpdate = datestr(now);
                 
                 if isfield(resultsStruct.(varNames{j}), 'trueBinsMap')
