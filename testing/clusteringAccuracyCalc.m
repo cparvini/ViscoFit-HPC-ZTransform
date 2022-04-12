@@ -95,7 +95,6 @@ for i_dir = 1:length(Folders)
                 end
                 
                 nBins = max(unique(outStruct.trueBinsMap),[],'all');
-                clusterAcc = 0;
                 
                 for jj = 1:numel([resultsStruct.(varNames{j}).clusterData(:)])
 
@@ -105,6 +104,7 @@ for i_dir = 1:length(Folders)
                         continue;
                     end
                     
+                    clusterAcc = 0;
                     binNums = perms(1:nBins);
                     
                     for kk = 1:size(binNums,1)

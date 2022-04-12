@@ -752,7 +752,7 @@ for i_dir = 1:length(Folders)
                     ax = nexttile;
 
                     surf(XPlot,YPlot,rot90(heightImg,1),rot90(heightImg,1),'EdgeColor','interp')
-                    colormap(ax,'turbo')
+                    colormap(ax,mapColorName)
                     hold on
                     box(ax,boxSetting)
                     title('Topography')
@@ -779,7 +779,7 @@ for i_dir = 1:length(Folders)
                         ax = nexttile;
 
                         surf(XPlot,YPlot,mapDataHeight,mapDataInd,'EdgeColor','interp')
-                        colormap(ax,'turbo')
+                        colormap(ax,mapColorName)
                         hold on
                         box(ax,boxSetting)
                         title('Indentation')

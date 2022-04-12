@@ -1307,9 +1307,9 @@ for i_dir = 1:length(Folders)
                             continue;
                         end
                         
-                        clusterAcc = 0;
-                        
-                        for kk = 1:nBins
+                        binNums = perms(1:nBins);
+                    
+                        for kk = 1:size(binNums,1)
 
                             % The clustered bins might not be in the correct
                             % "orientation". This would mean that the clustering
@@ -1320,43 +1320,28 @@ for i_dir = 1:length(Folders)
                             % possible.
 
                             % Cycle through the bin orientations
-                            if kk == 1
-                                mapDataClusters = resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D;
-                            else
-                                mapDataClusters = mapDataClusters - 1;
+                            outputMap = resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D;
+                            mapDataClusters = NaN(size(outputMap));
+                            for kbin = 1:size(binNums,2)
+                                mapDataClusters(outputMap == kbin) = binNums(kk,kbin);
                             end
-                            mapDataClusters(mapDataClusters == 0) = nBins;
 
                             binDelta = (mapDataClusters ~= resultsStruct.(varNames{j}).trueBinsMap);
                             temp = 1 - (sum(binDelta,'all') / numel(binDelta));
 
                             if kk == 1
+                            
+                                outStruct.(dirLabel).clusterData(jj).globalClusterMap2D = resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D;
+                                outStruct.(dirLabel).clusterData(jj).globalClusterAccuracy = resultsStruct.(varNames{j}).clusterData(jj).globalClusterAccuracy;
+                                outStruct.(dirLabel).clusterData(jj).lastUpdate = datestr(now);
 
-                                % This is the original configuration. This
-                                % info is already saved in the output
-                                % structure.
+                            elseif temp > outStruct.(dirLabel).clusterData(jj).clusterAccuracy/100
+
                                 clusterAcc = temp;
-
-                            elseif temp > clusterAcc
-
-                                % The clustering resulted in swapped
-                                % positions (i.e. it put "2" where the true
-                                % solution has "3" and/or vice versa). It
-                                % correctly separated the regions, BUT the
-                                % number is wrong. We should update all of
-                                % our results to use the configuration
-                                % closest to our ground truth.
-                                clusterAcc = temp;
-                                
-                                idxKnew = NaN(size(idxKtemp));
-                                for k_cluster = 1:numel(idxKnew)
-                                    idxKnew(k_cluster) = mapDataClusters(pixelLogtemp(k_cluster,1),pixelLogtemp(k_cluster,2));
-                                end
-                                if ~isrow(idxKnew) idxKnew = idxKnew'; end
-                                
-                                resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap = num2cell(idxKnew);
-                                resultsStruct.(varNames{j}).clusterData(jj).globalClusterMap2D = mapDataClusters;
-                                resultsStruct.(varNames{j}).clusterData(jj).lastUpdate = datestr(now);
+                                outStruct.(dirLabel).clusterData(jj).globalClusterMap2D = mapDataClusters;
+                                outStruct.(dirLabel).clusterData(jj).globalClusterAccuracy = 100*clusterAcc;
+                                outStruct.(dirLabel).clusterData(jj).lastUpdate = datestr(now);
+    %                             fprintf('\nThe Clustering Accuracy (%s) was %.2f%%\n',resultsStruct.(varNames{j}).clusterData(jj).clusterVar,100*clusterAcc);
 
                             end
 

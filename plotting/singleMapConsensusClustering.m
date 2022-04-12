@@ -1,5 +1,6 @@
-function [] = singleMapClustering(originalPath,N_workers,clusterTarget,varargin)
-%SINGLEMAPCLUSTERING Perform K-Medoids Clustering of QI Map
+function [] = singleMapConsensusClustering(originalPath,N_workers,clusterTarget,varargin)
+%SINGLEMAPCONSENSUSCLUSTERING Perform K-Medoids Consensus Clustering of QI
+%Map
 %   This function takes in a path argument, the target variable for
 %   clustering with k-medoids, and a variable number of arguments used to
 %   correct/shift the map representations. Note that the only non-boolean
@@ -7,9 +8,7 @@ function [] = singleMapClustering(originalPath,N_workers,clusterTarget,varargin)
 %   for plotting the frequency-dependent properties from the QI map. The
 %   full spectrum of frequencies available for each pixel are used in the
 %   clustering process, and evalPt is exclusively for visualization
-%   purposes. This function has a pair, globalMapClustering(), which will
-%   perform nearly the same analysis except it will combine many maps into
-%   one large clustering dataset.
+%   purposes.
 
 % User-Defined Settings
 correctTilt = true;
@@ -89,6 +88,7 @@ trimHeight = 100e-9;
 dFreq = 200; % Hz, step size between frames, if discrete
 n_freqs = 10; % frames, number of frames per order of magnitude
 n_datapoints = 10;
+clusterTargetList = {'force','indentation','storage','loss','relaxance'};
 
 % Check to see if there are subdirectories
 dirContents = dir(originalPath);
@@ -265,21 +265,8 @@ for i_dir = 1:length(Folders)
                 else
                     mapType = '-ZTrans';
                 end
-
-                switch clusterTarget
-                    case 'force'
-                        saveLabel = '-Force';
-                    case 'indentation'
-                        saveLabel = '-Ind';
-                    case 'storage'
-                        saveLabel = '-StorageMod';
-                    case 'loss'
-                        saveLabel = '-LossMod';
-                    case 'angle'
-                        saveLabel = '-LossAng';
-                    case 'relaxance'
-                        saveLabel = '-Relaxance';
-                end
+                
+                saveLabel = '-Consensus';
                 
                 plotFile = [path filesep fileLabels{j_dir} saveLabel 'Clustering-' varNames{j}...
                     mapType];
@@ -368,7 +355,7 @@ for i_dir = 1:length(Folders)
                 end
                 
                 heightImg = reshape(pixelHeightArray,mapSize);
-                clusteringData = NaN(numel(mapDataHeight),numel(magList));
+                clusteringData = NaN(numel(mapDataHeight),numel(magList),numel(clusterTargetList));
                 pixelLog = NaN(numel(mapDataHeight),2);
 
                 for k_pixels = 1:numel(heightImg)
@@ -603,43 +590,48 @@ for i_dir = 1:length(Folders)
                     end
                     
                     clusterInterp = [];
-
-                    switch clusterTarget
-                        case 'force'
-                            xinterp = t_t;
-                            obsList = timeList;
-                            clusterInterp = F_t;
-                        case 'indentation'
-                            xinterp = t_t;
-                            obsList = timeList;
-                            clusterInterp = h_t;
-                        case 'storage'
-                            xinterp = freq;
-                            obsList = magList;
-                            clusterInterp = modelStorage;
-                        case 'loss'
-                            xinterp = freq;
-                            obsList = magList;
-                            clusterInterp = modelLoss;
-                        case 'angle'
-                            xinterp = freq;
-                            obsList = magList;
-                            clusterInterp = modelAngle;
-                        case 'relaxance'
-                            xinterp = freq;
-                            obsList = magList;
-                            clusterInterp = modelRelaxance;
-                    end
-
-                    try
-                        % Resample to known array of frequencies
-                        obsOut = interp1(xinterp,clusterInterp,obsList,'makima',...
-                            NaN);
-                        clusteringData(k_pixels,:) = obsOut;
-                    catch
-                        % Do nothing
-                    end
                     
+                    for i_target = 1:numel(clusterTargetList)
+                        
+                        clusterTarget = clusterTargetList{i_target};
+                        switch clusterTarget
+                            case 'force'
+                                xinterp = t_t;
+                                obsList = timeList;
+                                clusterInterp = F_t;
+                            case 'indentation'
+                                xinterp = t_t;
+                                obsList = timeList;
+                                clusterInterp = h_t;
+                            case 'storage'
+                                xinterp = freq;
+                                obsList = magList;
+                                clusterInterp = modelStorage;
+                            case 'loss'
+                                xinterp = freq;
+                                obsList = magList;
+                                clusterInterp = modelLoss;
+                            case 'angle'
+                                xinterp = freq;
+                                obsList = magList;
+                                clusterInterp = modelAngle;
+                            case 'relaxance'
+                                xinterp = freq;
+                                obsList = magList;
+                                clusterInterp = modelRelaxance;
+                        end
+
+                        try
+                            % Resample to known array of frequencies
+                            obsOut = interp1(xinterp,clusterInterp,obsList,'makima',...
+                                NaN);
+                            clusteringData(k_pixels,:,i_target) = obsOut;
+                        catch
+                            % Do nothing
+                        end
+                    
+                    end
+                        
                     mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
                     xc = xc + 1;
 
@@ -652,60 +644,135 @@ for i_dir = 1:length(Folders)
                     
                 end
                 
-                % Perform some data cleaning. Columns where we don't have enough
-                % observations compared to bins are a PROBLEM. We have to remove
-                % these before analyzing.
-                dataVerify = ~isnan(clusteringData);
-                goodCols = sum(dataVerify,1);
-                idRem = goodCols < maxK;
+                for k_loop = (3-hideSubstrate):maxK
+                
+                    % Pre-allocate consensus matrix
+                    DCons = cell(numel(clusterTargetList),1);
+                    idxKall = cell(size(DCons));
+                    
+                    for i_target = 1:numel(clusterTargetList)
 
-                magList(idRem) = [];
-                freqList(idRem) = [];
-                timeList(idRem) = [];
-                clusteringData(:,idRem) = [];
+                        clusteringDataLoop = clusteringData(:,:,i_target);
+                        clusterTarget = clusterTargetList{i_target};
 
-                opts = statset('UseParallel',parallelSet,...
-                    'MaxIter',1e2,...
-                    'Display','off');
-                tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
-                    'Distance',@dtwf,...
-                    'Replicates',n_reps);
-                ids = all(isnan(clusteringData),2); % Find excluded pixels
-                clusteringData(ids,:) = [];
-                pixelLog(ids,:) = [];
+                        % Perform some data cleaning. Columns where we don't have enough
+                        % observations compared to bins are a PROBLEM. We have to remove
+                        % these before analyzing.
+                        dataVerify = ~isnan(clusteringDataLoop);
+                        goodCols = sum(dataVerify,1);
+                        idRem = goodCols < maxK;
+
+                        magListTemp = magList;
+                        freqListTemp = freqList;
+                        timeListTemp = timeList;
+                        
+                        magListTemp(idRem) = [];
+                        freqListTemp(idRem) = [];
+                        timeListTemp(idRem) = [];
+                        clusteringDataLoop(:,idRem) = [];
+
+                        opts = statset('UseParallel',parallelSet,...
+                            'MaxIter',1e2,...
+                            'Display','off');
+                        tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
+                            'Distance',@dtwf,...
+                            'Replicates',1);
+                        ids = all(isnan(clusteringDataLoop),2); % Find excluded pixels
+                        clusteringDataLoop(ids,:) = [];
+                        pixelLog(ids,:) = [];
+
+                        idxK = NaN(size(clusteringDataLoop,1),n_reps);
+                        
+                        for i_rep = 1:n_reps
+                        
+                            % Pre-allocate
+                            tempidx = NaN(size(clusteringDataLoop,1),1);
+                            
+                            % Perform clustering replicate
+                            tempidx = tempfunc(clusteringDataLoop,k_loop);
+                            
+                            if i_rep > 1
+                                
+                                binNums = perms(1:k_loop);
+                                clusterAcc = 0;
+                                
+                                for j_rep = 1:size(binNums,1)
+                                    
+                                    % Cycle through the bin orientations
+                                    oldMap = idxK(:,i_rep-1);
+                                    mapClusters = NaN(size(oldMap));
+                                    for kbin = 1:size(binNums,2)
+                                        mapClusters(oldMap == kbin) = binNums(j_rep,kbin);
+                                    end
+
+                                    binDelta = (mapClusters ~= oldMap);
+                                    temp = 1 - (sum(binDelta,'all') / numel(binDelta));
+
+                                    if j_rep == 1
+                                        
+                                        % Do nothing
+                                        
+                                    elseif temp > clusterAcc
+                                        
+                                        % The cluster assignments match the
+                                        % previous map better. Overwrite
+                                        % our old configuration
+                                        clusterAcc = temp;
+                                        tempidx = mapClusters;
+                                        
+                                    end
+                                    
+                                end
+                                
+                            end
+                            
+                            idxK(:,i_rep) = tempidx;
+                            
+                        end
+                        
+                        % Create our consensus matrix for this k value
+                        D = [];
+                        D = squeeze(sum(bsxfun(@eq, idxK', permute(idxK', [1 3 2]))));
+                        D = D/i_rep;
+                        D(logical(eye(size(D)))) = 1;
+                        
+                        DCons{i_target} = D;
+                        idxKall{i_target} = idxK;
+                        
+                    end
+                    
+                end
                 
-                % Try all of the cluster configurations. We start with 3
-                % clusters to account for any substrate pixels that were
-                % not trimmed. This is not ideal, but unavoidable with
-                % automatic large-scale analysis.
-                eva = evalclusters(clusteringData,tempfunc,'CalinskiHarabasz',...
-                    'klist',((3-hideSubstrate):maxK));
+                % Find our optimal K using the elbow method
                 
-                fprintf('\nOptimal Number of Bins: %d\n\n',eva.OptimalK);
                 
-                idxK = tempfunc(clusteringData,eva.OptimalK);
+                % Create dissimilarity matrix based on the consensus matrix
+                % for that run
                 
+                idxKout = [];
+                
+                % Visualize our results
                 mapDataClusters = NaN(flip(mapSize));
                 for k_cluster = 1:numel(idxK)
                     mapDataClusters(pixelLog(k_cluster,1),pixelLog(k_cluster,2)) = idxK(k_cluster);
                 end
                 
                 if exist('XA','var') && exist('YA','var')
-                        XPlot = XA./1e-6;
-                        xlab = sprintf('X Position [\\mum]');
-                        xlims = [0 max(scanSize)./1e-6];
-                        YPlot = YA./1e-6;
-                        ylab = sprintf('Y Position [\\mum]');
-                        ylims = [0 max(scanSize)./1e-6];
-                    else
-                        XPlot = X;
-                        xlab = 'X Index';
-                        xlims = [1 max(mapSize)];
-                        YPlot = Y;
-                        ylab = 'Y Index';
-                        ylims = [1 max(mapSize)];
-                    end
-                    
+                    XPlot = XA./1e-6;
+                    xlab = sprintf('X Position [\\mum]');
+                    xlims = [0 max(scanSize)./1e-6];
+                    YPlot = YA./1e-6;
+                    ylab = sprintf('Y Position [\\mum]');
+                    ylims = [0 max(scanSize)./1e-6];
+                else
+                    XPlot = X;
+                    xlab = 'X Index';
+                    xlims = [1 max(mapSize)];
+                    YPlot = Y;
+                    ylab = 'Y Index';
+                    ylims = [1 max(mapSize)];
+                end
+
                 tiledlayout(n_rows,n_cols, 'padding', 'none', ...
                     'TileSpacing', 'compact', ...
                     'OuterPosition', [0 0.15 1 0.85])
@@ -729,7 +796,7 @@ for i_dir = 1:length(Folders)
                 view(2)
                 pbaspect([1 1 1])
                 hold off
-                
+
                 if plotIndentation
 
                     ax = nexttile;
@@ -776,7 +843,7 @@ for i_dir = 1:length(Folders)
                         mapData = mapDataRelaxance;
                         plotTitle = 'Relaxance Clustering';
                 end
-                
+
                 surf(XPlot,YPlot,mapDataHeight,mapData,'EdgeColor',mapEdgeCol)
                 colormap(ax,mapColorName)
                 hold on
@@ -816,11 +883,11 @@ for i_dir = 1:length(Folders)
                         cb.Ruler.TickLabelFormat='%d Deg';
                         caxis([0 90]);
                 end
-                                
+
                 view(2)
                 pbaspect([1 1 1])
                 hold off
-                
+
                 ax = nexttile;
 
                 surf(XPlot,YPlot,mapDataHeight,mapDataClusters,'EdgeColor',mapEdgeCol)
@@ -836,7 +903,7 @@ for i_dir = 1:length(Folders)
                 view(2)
                 pbaspect([1 1 1])
                 hold off
-                
+                    
                 saveas(mapPlotWindow,[plotFile '.fig'])
 %                 saveas(mapPlotKMeans,[plotFile '.jpg'])
                 print(mapPlotWindow,[plotFile '.png'],'-dpng','-r300');
