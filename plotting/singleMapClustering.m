@@ -669,7 +669,9 @@ for i_dir = 1:length(Folders)
                     'Display','off');
                 tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
                     'Distance',@dtwf,...
-                    'Replicates',n_reps);
+                    'Replicates',n_reps,...
+                    'OnlinePhase','on',...
+                    'Algorithm','large');
                 ids = all(isnan(clusteringData),2); % Find excluded pixels
                 clusteringData(ids,:) = [];
                 pixelLog(ids,:) = [];
@@ -791,13 +793,13 @@ for i_dir = 1:length(Folders)
                         caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
                         temp = (cb.Ticks' .* 1e-9);
                         for ii = 1:numel(temp)
-                           cb.TickLabels{ii} = sprintf('%1.2g nN',temp(ii));
+                           cb.TickLabels{ii} = sprintf('%1.1g nN',temp(ii));
                         end
                     case 'indentation'
                         caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
                         temp = (cb.Ticks' .* 1e-9);
                         for ii = 1:numel(temp)
-                           cb.TickLabels{ii} = sprintf('%1.2g nm',temp(ii));
+                           cb.TickLabels{ii} = sprintf('%1.1g nm',temp(ii));
                         end
                     case 'storage'
                         caxis([0 10^ceil(log10(max(mapData,[],'all','omitnan')))]);
