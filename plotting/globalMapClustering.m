@@ -758,9 +758,9 @@ for i_dir = 1:length(Folders)
                         saveLabel = '-Relaxance';
                 end
                 
-                plotFile = [path filesep fileLabels{j_dir} saveLabel 'ClusteringGlobal-' varNames{j}...
+                plotFile = [Files(j_dir).folder filesep fileLabels{j_dir} saveLabel 'ClusteringGlobal-' varNames{j}...
                     mapType];
-
+                
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 if correctTilt
                     temp = fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate,[],optimizeFlattening);
