@@ -11,7 +11,7 @@ function fitStructOut = processMapZ_func(fitClass,varargin)
 
 % Initialize Output Structure
 tempFile = fullfile(tempdir,'fitStructTemp.mat');
-if exist(tempFile,'file') == 2
+if exist(tempFile,'file') == 3
     delete(tempFile);
 end
 fitStruct = matfile(tempFile,'Writable',true);
@@ -93,14 +93,15 @@ for i = 1:n_pixels
 end
 
 % Determine which pixels to ignore, if hideSubstrate == true
-[minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
+temp = cell2mat(fitClass.pixelHeight_cell);
+[minHeight,~] = min(temp(temp>0));
 substrateCutoff = minHeight + 100e-9;
-pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
-pixelOrder = 1:numel(fitClass.pixelHeight_cell);
+pixelHeightArray = cell2mat(fitClass.pixelHeight_cell);
+pixelOrder = 1:numel(pixelHeightArray);
 pixelsToRemove = false(size(pixelHeightArray));
 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
 
-pixelSkip = 1:numel([fitClass.pixelHeight_cell{:}]);
+pixelSkip = 1:numel(pixelHeightArray);
 pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
 
 if hideSubstrate

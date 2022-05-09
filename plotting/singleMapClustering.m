@@ -12,59 +12,49 @@ function [] = singleMapClustering(originalPath,N_workers,clusterTarget,varargin)
 %   one large clustering dataset.
 
 % User-Defined Settings
-correctTilt = true;
 hideSubstrate = true;
-zeroSubstrate = true;
-optimizeFlattening = false;
 fillPixels = true;
 logSteps = true;
 plotIndentation = true;
 evalPt = 1000;
 n_reps = 100; % number of clustering replicates
 maxK = 10; % Max number of cluster bins
+manualK = []; % Specific number of bins to use
 if nargin > 1
     if ~isempty(varargin)
         for i = 1:numel(varargin)
             switch i
                 case 1
                     if ~isempty(varargin{i})
-                        correctTilt = varargin{i};                        
+                        hideSubstrate = varargin{i};
                     end
                 case 2
                     if ~isempty(varargin{i})
-                        hideSubstrate = varargin{i};
+                        fillPixels = varargin{i};                        
                     end
                 case 3
                     if ~isempty(varargin{i})
-                        zeroSubstrate = varargin{i};                        
+                        logSteps = varargin{i};                        
                     end
                 case 4
                     if ~isempty(varargin{i})
-                        optimizeFlattening = varargin{i};                        
+                        plotIndentation = varargin{i};                        
                     end
                 case 5
                     if ~isempty(varargin{i})
-                        fillPixels = varargin{i};                        
+                        evalPt = varargin{i};                        
                     end
                 case 6
                     if ~isempty(varargin{i})
-                        logSteps = varargin{i};                        
+                        n_reps = varargin{i};                        
                     end
                 case 7
                     if ~isempty(varargin{i})
-                        plotIndentation = varargin{i};                        
+                        maxK = varargin{i};                        
                     end
                 case 8
                     if ~isempty(varargin{i})
-                        evalPt = varargin{i};                        
-                    end
-                case 9
-                    if ~isempty(varargin{i})
-                        n_reps = varargin{i};                        
-                    end
-                case 10
-                    if ~isempty(varargin{i})
-                        maxK = varargin{i};                        
+                        manualK = varargin{i};                        
                     end
                 otherwise
                     fprintf('Passed additional parameters to fit_map() which were not used.');
@@ -87,7 +77,7 @@ climHeight = 15e-6; % meters, the JPK Nanowizard has a 15um piezo
 climInd = 1000e-9; % meters
 trimHeight = 100e-9;
 dFreq = 200; % Hz, step size between frames, if discrete
-n_freqs = 10; % frames, number of frames per order of magnitude
+n_steps = 50; % frames, number of frames per order of magnitude
 n_datapoints = 10;
 
 % Check to see if there are subdirectories
@@ -166,6 +156,11 @@ for i_dir = 1:length(Folders)
                     mapSize = [128 128];
                 end
                 
+                % Grab some relevant settings
+                correctTilt = resultsStruct.(varNames{j}).correctTilt;
+                zeroSubstrate = resultsStruct.(varNames{j}).zeroSubstrate;
+                optimizeFlattening = resultsStruct.(varNames{j}).optimizeFlattening;
+                
                 if isfield(resultsStruct.(varNames{j}),'scanSize')
                     % We have the absolute map size!
                     scanSize = resultsStruct.(varNames{j}).scanSize;
@@ -218,12 +213,12 @@ for i_dir = 1:length(Folders)
                 else
                     while temp < maxFreq
                         if temp == minFreq
-                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_freqs);
+                            dFreq = 10^(ceil(log10(temp)))/n_steps; 
                         end
 
                         if temp >= tempmax
                             tempmax = temp*10;
-                            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_freqs);
+                            dFreq = 10^(ceil(log10(temp)))/n_steps; 
                         end
 
                         tempf = 10.^( ( log10(temp) ) );
@@ -292,7 +287,7 @@ for i_dir = 1:length(Folders)
                     pixelHeightArray = cell2mat(pixelHeight_cell);
                 end
 
-                [minHeight,~] = min(pixelHeightArray);
+                [minHeight,~] = min(pixelHeightArray(pixelHeightArray>0));
                 substrateCutoff = minHeight + trimHeight;
                 pixelsToRemove = false(size(pixelHeightArray));
                 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
@@ -657,35 +652,63 @@ for i_dir = 1:length(Folders)
                 % these before analyzing.
                 dataVerify = ~isnan(clusteringData);
                 goodCols = sum(dataVerify,1);
-                idRem = goodCols < maxK;
+                
+                if isempty(manualK)
+                    % Search for the optimal number of bins
+                    idRem = goodCols < maxK;
 
-                magList(idRem) = [];
-                freqList(idRem) = [];
-                timeList(idRem) = [];
-                clusteringData(:,idRem) = [];
+                    magList(idRem) = [];
+                    freqList(idRem) = [];
+                    timeList(idRem) = [];
+                    clusteringData(:,idRem) = [];
 
-                opts = statset('UseParallel',parallelSet,...
-                    'MaxIter',1e2,...
-                    'Display','off');
-                tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
-                    'Distance',@dtwf,...
-                    'Replicates',n_reps,...
-                    'OnlinePhase','on',...
-                    'Algorithm','large');
-                ids = all(isnan(clusteringData),2); % Find excluded pixels
-                clusteringData(ids,:) = [];
-                pixelLog(ids,:) = [];
-                
-                % Try all of the cluster configurations. We start with 3
-                % clusters to account for any substrate pixels that were
-                % not trimmed. This is not ideal, but unavoidable with
-                % automatic large-scale analysis.
-                eva = evalclusters(clusteringData,tempfunc,'CalinskiHarabasz',...
-                    'klist',((3-hideSubstrate):maxK));
-                
-                fprintf('\nOptimal Number of Bins: %d\n\n',eva.OptimalK);
-                
-                [idxK, centroidLocs] = tempfunc(clusteringData,eva.OptimalK);
+                    opts = statset('UseParallel',parallelSet,...
+                        'MaxIter',1e2,...
+                        'Display','off');
+                    tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
+                        'Distance',@dtwf,...
+                        'Replicates',n_reps,...
+                        'OnlinePhase','on',...
+                        'Algorithm','large');
+                    ids = all(isnan(clusteringData),2); % Find excluded pixels
+                    clusteringData(ids,:) = [];
+                    pixelLog(ids,:) = [];
+
+                    % Try all of the cluster configurations. We start with 3
+                    % clusters to account for any substrate pixels that were
+                    % not trimmed. This is not ideal, but unavoidable with
+                    % automatic large-scale analysis.
+                    eva = evalclusters(clusteringData,tempfunc,'CalinskiHarabasz',...
+                        'klist',((3-hideSubstrate):maxK));
+
+                    fprintf('\nOptimal Number of Bins: %d\n\n',eva.OptimalK);
+
+                    [idxK, centroidLocs] = tempfunc(clusteringData,eva.OptimalK);
+                else
+                    % Use the manually specified number of bins
+                    idRem = goodCols < manualK;
+
+                    magList(idRem) = [];
+                    freqList(idRem) = [];
+                    timeList(idRem) = [];
+                    clusteringData(:,idRem) = [];
+
+                    opts = statset('UseParallel',parallelSet,...
+                        'MaxIter',1e2,...
+                        'Display','off');
+                    tempfunc = @(x,k) kmedoidsnan(x,k,'Options',opts,...
+                        'Distance',@dtwf,...
+                        'Replicates',n_reps,...
+                        'OnlinePhase','on',...
+                        'Algorithm','large');
+                    ids = all(isnan(clusteringData),2); % Find excluded pixels
+                    clusteringData(ids,:) = [];
+                    pixelLog(ids,:) = [];
+
+                    fprintf('\nManual Number of Bins: %d\n\n',manualK);
+
+                    [idxK, centroidLocs] = tempfunc(clusteringData,manualK);
+                end
                 
                 mapDataClusters = NaN(flip(mapSize));
                 for k_cluster = 1:numel(idxK)
@@ -833,8 +856,13 @@ for i_dir = 1:length(Folders)
                 xlabel(xlab)
                 xlim(xlims)
                 ylim(ylims)
-                cb = colorbar('Ticks',1:eva.OptimalK,...
-                    'TickLabels',sprintfc('Bin %d',[1:eva.OptimalK]));
+                if isempty(manualK)
+                    cb = colorbar('Ticks',1:eva.OptimalK,...
+                        'TickLabels',sprintfc('Bin %d',[1:eva.OptimalK]));
+                else
+                    cb = colorbar('Ticks',1:manualK,...
+                        'TickLabels',sprintfc('Bin %d',[1:manualK]));
+                end
                 view(2)
                 pbaspect([1 1 1])
                 hold off

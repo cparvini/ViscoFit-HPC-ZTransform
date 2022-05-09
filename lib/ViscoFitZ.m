@@ -788,14 +788,15 @@ classdef ViscoFitZ
 
             % Determine which pixels to ignore, if hideSubstrate == true
             if hideSubstrate
-                [minHeight,~] = min([obj.pixelHeight_cell{:}]);
+                temp = cell2mat(obj.pixelHeight_cell);
+                [minHeight,~] = min(temp(temp>0));
                 substrateCutoff = minHeight + 100e-9;
-                pixelHeightArray = ([obj.pixelHeight_cell{:}]);
+                pixelHeightArray = cell2mat(obj.pixelHeight_cell);
                 pixelOrder = 1:numel(obj.pixelHeight_cell);
                 pixelsToRemove = false(size(pixelHeightArray));
                 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
 
-                pixelSkip = 1:numel([obj.pixelHeight_cell{:}]);
+                pixelSkip = 1:numel(pixelHeightArray);
                 pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
 
                 fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during fitting.\n', numel(pixelSkip), numel([obj.pixelHeight_cell{:}]))
@@ -1127,14 +1128,15 @@ classdef ViscoFitZ
 
             % Determine which pixels to ignore, if hideSubstrate == true
             if hideSubstrate
-                [minHeight,~] = min([obj.pixelHeight_cell{:}]);
+                temp = cell2mat(obj.pixelHeight_cell);
+                [minHeight,~] = min(temp(temp>0));
                 substrateCutoff = minHeight + 100e-9;
-                pixelHeightArray = ([obj.pixelHeight_cell{:}]);
-                pixelOrder = 1:numel(obj.pixelHeight_cell);
+                pixelHeightArray = cell2mat(obj.pixelHeight_cell);
+                pixelOrder = 1:numel(pixelHeightArray);
                 pixelsToRemove = false(size(pixelHeightArray));
                 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
 
-                pixelSkip = 1:numel([obj.pixelHeight_cell{:}]);
+                pixelSkip = 1:numel(pixelHeightArray);
                 pixelSkip(~pixelsToRemove) = [];    % Remove the pixels we want to keep from the list
 
                 fprintf('\n%d Pixels of %d have been marked as "substrate" and will be skipped during fitting.\n', numel(pixelSkip), numel([obj.pixelHeight_cell{:}]))

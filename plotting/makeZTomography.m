@@ -6,9 +6,6 @@ function [] = makeZTomography(originalPath,nPlanes,varargin)
 %   "analyze_map_zTransform" function or "fit_map_zTransform".
 
 % User-Defined Settings
-correctTilt = true;
-hideSubstrate = true;
-zeroSubstrate = true;
 fillPixels = true;
 showLabels = true;
 climMax = 2e5;
@@ -18,25 +15,13 @@ if nargin > 1
             switch i
                 case 1
                     if ~isempty(varargin{i})
-                        correctTilt = varargin{i};                        
+                        fillPixels = varargin{i};                        
                     end
                 case 2
                     if ~isempty(varargin{i})
-                        hideSubstrate = varargin{i};
-                    end
-                case 3
-                    if ~isempty(varargin{i})
-                        zeroSubstrate = varargin{i};                        
-                    end
-                case 4
-                    if ~isempty(varargin{i})
-                        fillPixels = varargin{i};                        
-                    end
-                case 5
-                    if ~isempty(varargin{i})
                         showLabels = varargin{i};                        
                     end
-                case 6
+                case 3
                     if ~isempty(varargin{i})
                         if isa(varargin{i},'numeric')
                             climMax = varargin{i};
@@ -127,6 +112,12 @@ for i_dir = 1:length(Folders)
                     mapSize = [128 128];
                 end
                 
+                % Grab some relevant settings
+                correctTilt = resultsStruct.(varNames{j}).correctTilt;
+                hideSubstrate = resultsStruct.(varNames{j}).hideSubstrate;
+                zeroSubstrate = resultsStruct.(varNames{j}).zeroSubstrate;
+                optimizeFlattening = resultsStruct.(varNames{j}).optimizeFlattening;
+                
                 if isfield(resultsStruct.(varNames{j}),'scanSize')
                     % We have the absolute map size!
                     scanSize = resultsStruct.(varNames{j}).scanSize;
@@ -199,12 +190,13 @@ for i_dir = 1:length(Folders)
                 
                 pixelHeightArray = NaN(size([pixelHeight_cell{:}]));
                 if correctTilt
-                    pixelHeightArray = cell2mat(fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate));
+                    temp = fixMapTilt({mapSize},pixelHeight_cell,zeroSubstrate,[],optimizeFlattening);
+                    pixelHeightArray = cell2mat(temp);
                 else
                     pixelHeightArray = cell2mat(pixelHeight_cell);
                 end
 
-                [minHeight,~] = min(pixelHeightArray);
+                [minHeight,~] = min(pixelHeightArray(pixelHeightArray>0));
                 substrateCutoff = minHeight + trimHeight;
                 pixelsToRemove = false(size(pixelHeightArray));
                 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;

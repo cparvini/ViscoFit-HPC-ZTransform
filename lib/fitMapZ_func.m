@@ -193,7 +193,8 @@ end
 % Determine which pixels to ignore, if hideSubstrate == true
 % If not hiding the substrate, we still need to know which pixels WOULD be
 % substrate, so we know NOT to use the thin sample correction there.
-[minHeight,~] = min([fitClass.pixelHeight_cell{:}]);
+temp = cell2mat(fitClass.pixelHeight_cell);
+[minHeight,~] = min(temp(temp>0));
 substrateCutoff = minHeight + 100e-9;
 pixelHeightArray = ([fitClass.pixelHeight_cell{:}]);
 pixelsToRemove = false(size(pixelHeightArray));

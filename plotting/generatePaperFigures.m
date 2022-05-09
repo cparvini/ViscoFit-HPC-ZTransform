@@ -1,4 +1,4 @@
-function [] = generatePaperFigures(originalPath,savePath,varargin)
+function [] = generatePaperFigures(clusterPath,highResPath,savePath,varargin)
 %GENERATEPAPERFIGURES Create the Figures from the Main Manuscript
 %   This function takes in a path argument and will subsequently create the
 %   figures shown in the main manuscript. The datasets are exceedingly
@@ -22,11 +22,9 @@ function [] = generatePaperFigures(originalPath,savePath,varargin)
 %   results datasets.
 
 % User-Defined Settings
-correctTilt = true;
 hideSubstrate = true;
-zeroSubstrate = true;
-optimizeFlattening = true;
 fillPixels = true;
+logSteps = true;
 showLabels = false;
 showScaleBar = true;
 clusterTarget = 'storage';
@@ -37,37 +35,29 @@ if nargin > 1
             switch i
                 case 1
                     if ~isempty(varargin{i})
-                        correctTilt = varargin{i};                        
+                        hideSubstrate = varargin{i};
                     end
                 case 2
                     if ~isempty(varargin{i})
-                        hideSubstrate = varargin{i};
+                        fillPixels = varargin{i};                        
                     end
                 case 3
                     if ~isempty(varargin{i})
-                        zeroSubstrate = varargin{i};                        
+                        logSteps = varargin{i};                        
                     end
                 case 4
                     if ~isempty(varargin{i})
-                        optimizeFlattening = varargin{i};                        
+                        showLabels = varargin{i};                        
                     end
                 case 5
                     if ~isempty(varargin{i})
-                        fillPixels = varargin{i};                        
+                        showScaleBar = varargin{i};                        
                     end
                 case 6
                     if ~isempty(varargin{i})
-                        showLabels = varargin{i};                        
-                    end
-                case 7
-                    if ~isempty(varargin{i})
-                        showScaleBar = varargin{i};                        
-                    end
-                case 8
-                    if ~isempty(varargin{i})
                         clusterTarget = varargin{i};                        
                     end
-                case 9
+                case 7
                     if ~isempty(varargin{i})
                         if isa(varargin{i},'numeric')
                             climMax = varargin{i};
@@ -77,14 +67,13 @@ if nargin > 1
                         end
                     end
                 otherwise
-                    fprintf('Passed additional parameters to fit_map() which were not used.');
+                    fprintf('Passed additional parameters to generatePaperFigures() which were not used.');
             end
         end
     end
 end
 
 %% Permanent Settings
-errortype = 'sse';    
 figX = 0;
 figY = 0;
 maxwid = get(0,'screensize');
@@ -95,33 +84,47 @@ figHeight = figWid;
 mapColorName = 'turbo';
 boxSetting = 'on';
 zMax = 15e-6; % meters, the JPK Nanowizard has a 15um piezo 
-climInd = 1000e-9; % meters
+climInd = 200e-9; % meters
+climForce = 1e-9; % nN
 stiffMax = 10*climMax; % Pa
 trimHeight = 100e-9;
 dFreq = 200; % Hz, step size between frames
 n_steps = 100; % frames, number of frames per order of magnitude
 n_datapoints = 10;
-mediumFontSize = 14;
-largeFontSize = 18;
+smallFontSize = 16;
+mediumFontSize = 24;
+largeFontSize = 32;
+
+% Placeholders if our file doesn't have these settings
+correctTilt = true;
+zeroSubstrate = true;
+optimizeFlattening = true;
 
 %% Start Timer
 tic
 
 %% Figure 1 Data Selections
-exampleCellType = {'HFF'};      % Cell Type to use
-exampleCellDish = {1};          % Dish Number of Type
-exampleCellNumber = {4};        % Cell Number in Dish
-examplePixelNumber = {1000};    % Pixel to grab observables from
-evalPt = 500;                   % Frequency for evaluating maps
+% Note that we will be using a high resolution map for visualizations in
+% Figure 2. For figures 1 and 3, we need to use a low resolution map
+% because we have excluded the high-res maps from our global analysis and
+% we want to show the isolated vs. global in figure 3.
+
+% Make sure that the cell type, dish number, and cell number 
+% actually represent a valid selection for this subgroup.
+
+exampleCellType = {'HFF'};          % Cell Type to use
+exampleCellDish = {1};              % Dish Number of Type
+exampleCellNumber = {4};            % Cell Number in Dish
+examplePixelNumber = {8000};        % Pixel to grab observables from
+evalPt = 1000;                      % Frequency for evaluating maps
 
 %% Figure 1
-%
-
-fprintf('\nGenerating Figure 1...');
+fprintf('Generating Figure 1...');
 % Begin by finding the file we need for this figure and loading the data
 % Search recursively (using "**") for our zTransform results files
-dataFile = dir(fullfile(originalPath, '**',...
-    ['*' exampleCellType{1} 'Dish' exampleCellDish{1} '*Cell' exampleCellNumber{1} '*Results*zTransform*.mat']));
+dataFile = dir(fullfile(clusterPath, '**',...
+    ['*' num2str(exampleCellType{1}) 'Dish' num2str(exampleCellDish{1})...
+    '*Cell' num2str(exampleCellNumber{1}) '_*Results*zTransform*.mat']));
 
 if isempty(dataFile)
     error('The directory you selected does not contain the Z-Transform QI map indicated for Figure 1. Please verify your MapResults file is in that directory and the filename contains "zTransform".');
@@ -132,14 +135,23 @@ varNames = fields(resultsStruct);
 
 % If there are any other analysis results...skip them! This is
 % primarily for compatibility later, in case a new analysis type is
-% proposed in the future.    
-j = find(strcmpi(varNames,'zTransform'));
+% proposed in the future.
+j = find(contains(varNames,'zTransform'));
     
 % Extract the size of the map from our results file
 if isfield(resultsStruct.(varNames{j}),'mapSize')
     mapSize = resultsStruct.(varNames{j}).mapSize;
 else
     mapSize = [128 128];
+end
+
+% Grab some relevant settings
+try
+    correctTilt = resultsStruct.(varNames{j}).correctTilt;
+    zeroSubstrate = resultsStruct.(varNames{j}).zeroSubstrate;
+    optimizeFlattening = resultsStruct.(varNames{j}).optimizeFlattening;
+catch
+    warning('The variables correctTilt, zeroSubstrate, and optimizeFlattening were not found in the results file. Using hard-coded settings in generatePaperFigures() (all set to true).');
 end
 
 % In the case that we were able to extract the AFM-programmed map size,
@@ -204,12 +216,12 @@ if ~logSteps
 else
     while temp < maxFreq
         if temp == minFreq
-            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_steps);
+            dFreq = 10^(ceil(log10(temp)))/n_steps;
         end
 
         if temp >= tempmax
             tempmax = temp*10;
-            dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_steps);
+            dFreq = 10^(ceil(log10(temp)))/n_steps;
         end
 
         tempf = 10.^( ( log10(temp) ) );
@@ -234,7 +246,7 @@ end
 % Remove pixels that are below our trim height to hopefully exclude the
 % substrate. If not removed, the substrate will appear significantly
 % stiffer than the cell and become saturated in the output plots.
-[minHeight,~] = min(pixelHeightArray);
+[minHeight,~] = min(pixelHeightArray(pixelHeightArray>0));
 substrateCutoff = minHeight + trimHeight;
 pixelsToRemove = false(size(pixelHeightArray));
 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
@@ -294,8 +306,11 @@ mapDataAngle = NaN(flip(mapSize));
 mapDataRelaxance = NaN(flip(mapSize));
 mapDataHeight = NaN(flip(mapSize));
 mapDataInd = NaN(flip(mapSize));
+mapDataForce = NaN(flip(mapSize));
+heightImg = zeros(flip(mapSize));
 
 pixelLog = NaN(numel(mapDataHeight),2);
+heightImg = rot90(reshape(pixelHeightArray,mapSize),1);
 
 for k_pixels = 1:numel(mapDataStorage)
 
@@ -341,21 +356,23 @@ for k_pixels = 1:numel(mapDataStorage)
     freqAdj = freq(maxid);
     freq = freq - freqAdj;
 
-    % We will want to save our two-sided frequency vector for
-    % later.
-    if k_pixels == examplePixelNumber{1}
-        freq_example = freq;
-        F_hz_example = F_hz;
-        h_hz_example = h_hz;
-    end
-
     % We are just plotting the data captured
     % DIRECTLY from the z-transform method.
     modelStorage = abs(real(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
     modelLoss = abs(imag(resultsStruct.(varNames{j}).relaxanceMap{k_pixels}));
     modelAngle = atand(modelLoss./modelStorage);
     modelRelaxance = resultsStruct.(varNames{j}).relaxanceMap{k_pixels};
-
+    
+    % We will want to save our two-sided frequency vector for
+    % later.
+    if k_pixels == examplePixelNumber{1}
+        freq_example = freq;
+        F_hz_example = F_hz;
+        h_hz_example = h_hz;
+        Estorage_hz_example = modelStorage;
+        Eloss_hz_example = modelLoss;
+    end
+    
     if (evalPt > max(freq,[],'omitnan')) || (evalPt < min(freq,[],'omitnan')) || any(isnan(freq)) || numel(freq((freq >= min(freqList)) & (freq <= max(freqList)))) < 2
 
         mapDataStorage(idx_pixel) = NaN;
@@ -364,6 +381,7 @@ for k_pixels = 1:numel(mapDataStorage)
         mapDataRelaxance(idx_pixel) = NaN;
         mapDataHeight(idx_pixel) = NaN;
         mapDataInd(idx_pixel) = NaN;
+        mapDataForce(idx_pixel) = NaN;
         xc = xc + 1;
 
         % This is a problematic example, so we'll just give empty
@@ -399,19 +417,26 @@ for k_pixels = 1:numel(mapDataStorage)
         % (normalization issues)
         t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
         h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-        mapDataInd(idx_pixel) = interp1(t_t,h_t,evalPt,'makima',...
+        F_t = resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels};
+        mapDataInd(idx_pixel) = interp1(t_t,h_t,1./evalPt,'makima',...
             1e-12);
-        mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+        mapDataForce(idx_pixel) = interp1(t_t,F_t,1./evalPt,'makima',...
+            1e-12);
+%         mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+        mapDataHeight(idx_pixel) = heightImg(mapSize(2)-yc,xc);
+        
 
         % We will want to save our two-sided frequency vector for
         % later.
         if k_pixels == examplePixelNumber{1}
             temph = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-            h_t_example = interp1(t_t,temph,evalPt,'makima',...
-                1e-12);
+%             h_t_example = interp1(t_t,temph,1./freq(ids),'makima',...
+%                 1e-12);
+            h_t_example = temph;
             tempF = resultsStruct.(varNames{j}).ViscoClass.forces_cell{k_pixels};
-            F_t_example = interp1(t_t,tempF,evalPt,'makima',...
-                1e-12);
+%             F_t_example = interp1(t_t,tempF,1./freq(ids),'makima',...
+%                 1e-12);
+            F_t_example = tempF;
         end
 
         xc = xc + 1;
@@ -490,6 +515,7 @@ mapDataLoss(mapDataLoss == 0) = NaN;
 mapDataAngle(mapDataAngle == 0) = NaN;
 mapDataRelaxance(mapDataRelaxance == 0) = NaN;
 mapDataInd(mapDataInd == 0) = NaN;
+mapDataForce(mapDataForce==0) = NaN;
 
 if exist('XA','var') && exist('YA','var')
     XPlot = XA./1e-6;
@@ -530,22 +556,42 @@ else
 end
 
 % Plot raw example datasets
-plot(h_t_example./1e-6,F_t_example./1e-9,'r-','LineWidth',5)
+ax = gca;
+plot(h_t_example,F_t_example,'r-','LineWidth',5)
+% plot(h_t_example,smooth(F_t_example,floor(numel(F_t_example)*0.1)),'r-','LineWidth',5)
 hold on
+grid on
 box(ax,boxSetting)
-xlabel('Indentation [$$\\mum$$]','Interpreter','latex')
+set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
+xlabel('Indentation [$$nm$$]','Interpreter','latex','FontSize',mediumFontSize)
 xlim([0 max(h_t_example)])
-ylabel('Force [$$nN$$]','Interpreter','latex')
+ylabel('Force [$$pN$$]','Interpreter','latex','FontSize',mediumFontSize)
 ylim([0 1.1*max(F_t_example)])
 view(2)
-pbaspect([1 1 1])
+
+temp = (xticks' ./ 1e-9);
+TickLabels = cell(size(temp));
+for ii = 1:numel(temp)
+   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+end
+xticklabels(TickLabels)
+
+temp = (yticks' ./ 1e-12);
+TickLabels = cell(size(temp));
+for ii = 1:numel(temp)
+   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+end
+yticklabels(TickLabels)
+
 hold off
+pbaspect([1 1 1])
 
 % Using exportgraphics() for Higher Quality
 plotFile = [savePath filesep 'Fig1a-FDcurve'];
 saveas(mapPlotWindow,[plotFile '.fig'])
-exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
 
 % Clear old figures if they exist
 if ~exist('mapPlotWindow','var')
@@ -562,33 +608,129 @@ end
 
 % Plot Z-Transform example datasets
 yyaxis left
-plot(freq_example,F_hz_example,'r-','LineWidth',5)
+ax = gca;
+plot(freq_example,F_hz_example,'LineWidth',8)
+% plot(freq_example,smooth(F_hz_example,floor(numel(F_hz_example)*0.1)),'LineWidth',8)
 hold on
+grid on
 box(ax,boxSetting)
-xlabel('Frequency [$$Hz$$]','Interpreter','latex')
+set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+set( findall(gca, '-property', 'fontsize'), 'fontsize', smallFontSize)
+xlabel('Frequency [$$Hz$$]','Interpreter','latex','FontSize',mediumFontSize)
 xlim([0 max(freq_example)])
-ylabel('Force [$$Arb.$$]','Interpreter','latex')
-ylim([0 1.1*max(F_hz_example)])
+ylabel('Force [$$Arb.$$]','Interpreter','latex','FontSize',mediumFontSize)
+% ylim([0 1.1*max(F_hz_example)])
+ylim([0 1.1*max(smooth(F_hz_example,floor(numel(F_hz_example)*0.1)))])
 view(2)
 hold off
 
 yyaxis right
-plot(freq_example,h_hz_example,'r-','LineWidth',5)
+ax = gca;
+plot(freq_example,h_hz_example,'LineWidth',5)
+% plot(freq_example,smooth(h_hz_example,floor(numel(h_hz_example)*0.1)),'LineWidth',5)
 hold on
+grid on
 box(ax,boxSetting)
+set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
 xlim([0 max(freq_example)])
-ylabel('Indentation [$$Arb.$$]','Interpreter','latex')
+ylabel('Indentation [$$Arb.$$]','Interpreter','latex','FontSize',mediumFontSize)
 ylim([0 1.1*max(h_hz_example)])
+ylim([0 1.1*max(smooth(h_hz_example,floor(numel(h_hz_example)*0.1)))])
 view(2)
 hold off
+
+temp = (xticks' ./ 1e3);
+TickLabels = cell(size(temp));
+for ii = 1:numel(temp)
+   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+end
+xticklabels(TickLabels)
 
 pbaspect([1 1 1])
 
 % Using exportgraphics() for Higher Quality
 plotFile = [savePath filesep 'Fig1a-ZDistributions'];
 saveas(mapPlotWindow,[plotFile '.fig'])
-exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
+
+% Clear old figures if they exist
+if ~exist('mapPlotWindow','var')
+    mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+else
+    try
+        figure(mapPlotWindow)
+        clf
+        mapPlotWindow.Position = [figX figY figWid figHeight];
+    catch
+        mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+    end
+end
+
+% Plot Z-Transform viscoelastic observables example datasets
+% First, find ylim max because both axes have the same units
+tempMax = [1.1*max(Estorage_hz_example) 1.1*max(Eloss_hz_example)];
+pbaspect([1 1 1])
+
+% Now, make the plot
+yyaxis left
+ax = gca;
+plot(freq_example,Estorage_hz_example,'LineWidth',8)
+% plot(freq_example,smooth(Estorage_hz_example,floor(numel(Estorage_hz_example)*0.1)),'LineWidth',8)
+hold on
+grid on
+box(ax,boxSetting)
+set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+set( findall(gca, '-property', 'fontsize'), 'fontsize', smallFontSize)
+xlabel('Frequency [$$Hz$$]','Interpreter','latex','FontSize',mediumFontSize)
+xlim([0 max(freq_example)])
+ylabel('Storage Modulus [$$kPa$$]','Interpreter','latex','FontSize',mediumFontSize)
+ylim([0 max(tempMax)])
+
+temp = (yticks' ./ 1e3);
+TickLabels = cell(size(temp));
+for ii = 1:numel(temp)
+   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+end
+yticklabels(TickLabels)
+
+view(2)
+hold off
+
+yyaxis right
+ax = gca;
+plot(freq_example,Eloss_hz_example,'LineWidth',8)
+% plot(freq_example,smooth(Eloss_hz_example,floor(numel(Eloss_hz_example)*0.1)),'LineWidth',5)
+hold on
+grid on
+box(ax,boxSetting)
+set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+
+temp = (yticks' ./ 1e3);
+TickLabels = cell(size(temp));
+for ii = 1:numel(temp)
+   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+end
+yticklabels(TickLabels)
+
+xlim([0 max(freq_example)])
+ylabel('Loss Modulus [$$kPa$$]','Interpreter','latex','FontSize',mediumFontSize)
+ylim([0 max(tempMax)])
+view(2)
+hold off
+
+temp = (xticks' ./ 1e3);
+TickLabels = cell(size(temp));
+for ii = 1:numel(temp)
+   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+end
+xticklabels(TickLabels)
+
+% Using exportgraphics() for Higher Quality
+plotFile = [savePath filesep 'Fig1a-ZViscoModuli'];
+saveas(mapPlotWindow,[plotFile '.fig'])
+exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
 
 % Subfigure (b): Example Observables from QI Map
 % Clear old figures if they exist
@@ -641,18 +783,22 @@ for i_plot = 1:5
     end
 
     surf(XPlot,YPlot,mapDataHeight,mapData,'EdgeColor','interp')
+    ax = gca;
     colormap(ax,mapColorName)
     hold on
     box(ax,boxSetting)
-    title(plotTitle,'FontSize',largeFontSize)
+    set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+    set( findall(gca, '-property', 'fontsize'), 'fontsize', smallFontSize)
     if showLabels
-        xlabel(xlab)
-        ylabel(ylab)
+        title(plotTitle,'FontSize',largeFontSize)
+        xlabel(xlab,'FontSize',mediumFontSize)
+        ylabel(ylab,'FontSize',mediumFontSize)
     else
         set(gca,'YTickLabel',[],'XTickLabel',[])
     end
     xlim(xlims)
     ylim(ylims)
+%     axis('equal')
     cb = colorbar;
     switch i_plot
         case 1
@@ -664,7 +810,7 @@ for i_plot = 1:5
             scaleBarMax = zMax;
             
             % Add our marker for where the example plots came from!
-            scatter3(xpos,ypos,mapDataHeight(xpos,ypos),25,'rs')
+            scatter3(XPlot(ypos,xpos),YPlot(ypos,xpos),mapDataHeight(ypos,xpos)*1.1,50,'rs','filled')
             
         case 2
             caxis([0 climInd]);
@@ -678,7 +824,7 @@ for i_plot = 1:5
             caxis([0 climMax]);
             temp = (cb.Ticks' .* 1e-3);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+               cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
             end
             scaleBarMax = climMax;
 
@@ -686,7 +832,7 @@ for i_plot = 1:5
             caxis([0 climMax]);
             temp = (cb.Ticks' .* 1e-3);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+               cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
             end
             scaleBarMax = climMax;
 
@@ -696,6 +842,7 @@ for i_plot = 1:5
             scaleBarMax = 90;
 
     end
+    cb.FontSize = smallFontSize;
     
     if showScaleBar && exist('XA','var') && exist('YA','var')
         barsize = 10^ceil(log10(max(xlims))-1);
@@ -703,17 +850,26 @@ for i_plot = 1:5
         ybar = ones(size(xbar))*(1/12.5)*xlims(2);
         zbar = ones(size(ybar))*scaleBarMax;
         plot3(xbar,ybar,zbar,'-k','LineWidth',5)
-        text(xbar(1),ybar(1),zbar(1),sprintf('%d \\mum',barsize/1e-6),...
+        text(xbar(1),ybar(1),zbar(1),sprintf('%d \\mum',barsize),...
             'HorizontalAlignment','left',...
             'VerticalAlignment','top',...
             'FontSize',mediumFontSize);
         
         xlim(xlims)
         ylim(xlims)
-        zlim([0 scaleBarMax])
+%         zlim([0 scaleBarMax])
         view(2)
     end
-        
+       
+    if any(diff(yticks) ~= barsize)
+        temp = yticks;
+        yticks(ax,temp(1):barsize:temp(end))
+    end
+    if any(diff(xticks) ~= barsize)
+        temp = xticks;
+        xticks(ax,temp(1):barsize:temp(end))
+    end
+    
     hold off
     
     view(2)
@@ -725,15 +881,28 @@ for i_plot = 1:5
     
     % Using exportgraphics() for Higher Quality
     saveas(mapPlotWindow,[plotFile '.fig'])
-    exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-    exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+    exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+    exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
 
 end
 
 % Before moving on, while we are here, we are going to save some results
 % for plotting later (Fig. 3).
 mapDataHeightExample = mapDataHeight;
-mapDataStorageExample = mapDataStorage;
+switch clusterTarget
+    case 'force'
+        mapDataTargetExample = mapDataForce;
+    case 'indentation'
+        mapDataTargetExample = mapDataInd;
+    case 'storage'
+        mapDataTargetExample = mapDataStorage;
+    case 'loss'
+        mapDataTargetExample = mapDataLoss;
+    case 'angle'
+        mapDataTargetExample = mapDataAngle;
+    case 'relaxance'
+        mapDataTargetExample = mapDataRelaxance;
+end
 cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
 mapDataCluster2DExample = resultsStruct.(varNames{j}).clusterData(cid).clusterMap2D;
 mapDataGlobalCluster2DExample = resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap2D;
@@ -742,10 +911,10 @@ fprintf('complete!\n');
 
 %% Figure 2 Data Selections
 exampleCellType = {'HEMa','HFF','A375P','A375M1','A375M2'};     % Cell Type to use
-exampleCellDish = {1, 1, 1 ,1 ,1};                              % Dish Number of Type
-exampleCellNumber = {1, 1, 1, 1, 1};                            % Cell Number in Dish
+exampleCellDish = {2, 1, 1, 2 ,1};                              % Dish Number of Type
+exampleCellNumber = {2, 1, 1, 1, 1};                            % Cell Number in Dish
 evalPt = [5e2, 1e3, 5e3, 10e3, 50e3];                           % Frequency for evaluating maps
-dataOrder = {'ind','storage','loss','angle'};                   % Order (L > R, Top > Bottom) to plot observables in quad
+dataOrder = {'topo','storage','loss','angle'};                  % Order (L > R, Top > Bottom) to plot observables in quad
 
 %% Figure 2
 % For this figure, we create compact grids of viscoelastic observables for
@@ -757,8 +926,9 @@ for i_file = 1:numel(exampleCellType)
 
     % Begin by finding the file we need for this figure and loading the data
     % Search recursively (using "**") for our zTransform results files
-    dataFile = dir(fullfile(originalPath, '**',...
-        ['*' exampleCellType{i_file} 'Dish' exampleCellDish{i_file} '*Cell' exampleCellNumber{i_file} '*Results*zTransform*.mat']));
+    dataFile = dir(fullfile(highResPath, '**',...
+        ['*' num2str(exampleCellType{i_file}) 'Dish' num2str(exampleCellDish{i_file})...
+        '*Cell' num2str(exampleCellNumber{i_file}) '_*Results*zTransform*.mat']));
 
     if isempty(dataFile)
         error('The directory you selected does not contain the Z-Transform QI map indicated for Figure 1. Please verify your MapResults file is in that directory and the filename contains "zTransform".');
@@ -770,13 +940,22 @@ for i_file = 1:numel(exampleCellType)
     % If there are any other analysis results...skip them! This is
     % primarily for compatibility later, in case a new analysis type is
     % proposed in the future.    
-    j = find(strcmpi(varNames,'zTransform'));
+    j = find(contains(varNames,'zTransform'));
 
     % Extract the size of the map from our results file
     if isfield(resultsStruct.(varNames{j}),'mapSize')
         mapSize = resultsStruct.(varNames{j}).mapSize;
     else
         mapSize = [128 128];
+    end
+    
+    % Grab some relevant settings
+    try
+        correctTilt = resultsStruct.(varNames{j}).correctTilt;
+        zeroSubstrate = resultsStruct.(varNames{j}).zeroSubstrate;
+        optimizeFlattening = resultsStruct.(varNames{j}).optimizeFlattening;
+    catch
+        warning('The variables correctTilt, zeroSubstrate, and optimizeFlattening were not found in the results file. Using hard-coded settings in generatePaperFigures() (all set to true).');
     end
 
     % In the case that we were able to extract the AFM-programmed map size,
@@ -817,18 +996,18 @@ for i_file = 1:numel(exampleCellType)
     % Remove pixels that are below our trim height to hopefully exclude the
     % substrate. If not removed, the substrate will appear significantly
     % stiffer than the cell and become saturated in the output plots.
-    [minHeight,~] = min(pixelHeightArray);
+    [minHeight,~] = min(pixelHeightArray(pixelHeightArray>0));
     substrateCutoff = minHeight + trimHeight;
     pixelsToRemove = false(size(pixelHeightArray));
     pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
-
+    
     % Remove the pixels we want to keep from the list
     pixelSkip = 1:numel(pixelHeightArray);
     pixelSkip(~pixelsToRemove) = [];
-
-    % Starting position for the map
-    xc = 1;
-    yc = 0;
+    
+    % Make blank map data
+    heightImg = zeros(flip(mapSize));
+    heightImg = rot90(reshape(pixelHeightArray,mapSize),1);
 
     % First, if we don't have our indentation map stored (legacy files), we
     % have to quickly calculate our observables to use during the analysis.
@@ -881,6 +1060,10 @@ for i_file = 1:numel(exampleCellType)
         mapDataInd = NaN(flip(mapSize));
 
         pixelLog = NaN(numel(mapDataHeight),2);
+        
+        % Starting position for the map
+        xc = 1;
+        yc = 0;
 
         for k_pixels = 1:numel(mapDataStorage)
 
@@ -968,9 +1151,10 @@ for i_file = 1:numel(exampleCellType)
                 % (normalization issues)
                 t_t = resultsStruct.(varNames{j}).ViscoClass.times_cell{k_pixels};
                 h_t = resultsStruct.(varNames{j}).ViscoClass.indentations_cell{k_pixels};
-                mapDataInd(idx_pixel) = interp1(t_t,h_t,freqList(k_freq),'makima',...
+                mapDataInd(idx_pixel) = interp1(t_t,h_t,1./freqList(k_freq),'makima',...
                     1e-12);
-                mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+%                 mapDataHeight(idx_pixel) = pixelHeightArray(idx_pixel);
+                mapDataHeight(idx_pixel) = heightImg(mapSize(2)-yc,xc);
 
                 xc = xc + 1;
 
@@ -1080,8 +1264,8 @@ for i_file = 1:numel(exampleCellType)
         end
         
         tiledlayout(2,2,...
-            'padding', 'none', ...
-            'TileSpacing', 'none')
+            'TileSpacing', 'none');
+%         pbaspect([1 1 1])
 
         for i_plot = 1:4
 
@@ -1089,6 +1273,11 @@ for i_file = 1:numel(exampleCellType)
             plotTarget = dataOrder{i_plot};
 
             switch plotTarget
+                case 'topo'
+                    mapData = mapDataHeight;
+                    plotTitle = 'Topography';
+                    saveLabel = 'Topography';
+                    
                 case 'ind'
                     mapData = mapDataInd;
                     plotTitle = 'Indentation';
@@ -1120,51 +1309,60 @@ for i_file = 1:numel(exampleCellType)
             surf(XPlot,YPlot,mapDataHeight,mapData,'EdgeColor','interp')
             colormap(ax,mapColorName)
             hold on
+            grid on
             box(ax,boxSetting)
+            set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
 %             title(plotTitle,'FontSize',largeFontSize)
-%             xlabel(xlab)
-%             ylabel(ylab)
+%             xlabel(xlab,'FontSize',mediumFontSize)
+%             ylabel(ylab,'FontSize',mediumFontSize)
             set(gca,'YTickLabel',[],'XTickLabel',[])
             xlim(xlims)
             ylim(ylims)
-%             cb = colorbar;
-%             switch plotTarget
-%                 case 'ind'
-%                     caxis([0 climInd]);
-%                     temp = (cb.Ticks' ./ 1e-9);
-%                     for ii = 1:numel(temp)
-%                        cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
-%                     end
-% 
-%                 case 'storage'
-%                     caxis([0 climMax]);
-%                     temp = (cb.Ticks' .* 1e-3);
-%                     for ii = 1:numel(temp)
-%                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-%                     end
-% 
-%                 case 'loss'
-%                     caxis([0 climMax]);
-%                     temp = (cb.Ticks' .* 1e-3);
-%                     for ii = 1:numel(temp)
-%                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-%                     end
-% 
-%                 case 'angle'
-%                     cb.Ruler.TickLabelFormat='%g Deg';
-%                     caxis([0 90]);
-%                     
-%                 case 'relaxance'
-%                     caxis([0 climMax]);
-%                     temp = (cb.Ticks' .* 1e-3);
-%                     for ii = 1:numel(temp)
-%                        cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-%                     end
-% 
-%             end
+%             axis('equal')
+            
+            switch plotTarget
+                case 'topo'
+                    caxis(ax,[0 zMax]);
+                case 'ind'
+                    caxis(ax,[0 climInd]);
+                case 'storage'
+                    caxis(ax,[0 climMax]);
+                case 'loss'
+                    caxis(ax,[0 climMax]);
+                case 'angle'
+                    caxis(ax,[0 90]);
+                case 'relaxance'
+                    caxis(ax,[0 climMax]);
+            end
+            
+            if showScaleBar && exist('XA','var') && exist('YA','var')
+                barsize = 10^ceil(log10(max(xlims))-1);
+                xbar = [(1/20)*xlims(2) (1/20)*xlims(2)+barsize];
+                ybar = ones(size(xbar))*(1/10)*xlims(2);
+                zbar = ones(size(ybar))*scaleBarMax;
+                plot3(xbar,ybar,zbar,'-k','LineWidth',5)
+                text(xbar(1),ybar(1),zbar(1),sprintf('%d \\mum',barsize),...
+                    'HorizontalAlignment','left',...
+                    'VerticalAlignment','top',...
+                    'FontSize',smallFontSize);
 
+                xlim(xlims)
+                ylim(xlims)
+        %         zlim([0 scaleBarMax])
+            end
+            
             hold off
             view(2)
+            
+            if any(diff(yticks) ~= barsize)
+                temp = yticks;
+                yticks(ax,temp(1):barsize:temp(end))
+            end
+            if any(diff(xticks) ~= barsize)
+                temp = xticks;
+                xticks(ax,temp(1):barsize:temp(end))
+            end
+            
             pbaspect([1 1 1])
             drawnow
             
@@ -1175,66 +1373,72 @@ for i_file = 1:numel(exampleCellType)
         
         % Using exportgraphics() for Higher Quality
         saveas(mapPlotWindow,[plotFile '.fig'])
-        exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-        exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+        exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+        exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
     
     end
         
-    % Plot our topography and save it
-    % Clear old figures if they exist
-    if ~exist('mapPlotWindow','var')
-        mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-    else
-        try
-            figure(mapPlotWindow)
-            clf
-            mapPlotWindow.Position = [figX figY figWid figHeight];
-        catch
-            mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
-        end
-    end
-
-    plotTitle = 'Topography';
-    saveLabel = 'Topography';
-
-    surf(XPlot,YPlot,mapDataHeight,mapDataHeight,'EdgeColor','interp')
-    colormap(ax,mapColorName)
-    hold on
-    box(ax,boxSetting)
-    title(plotTitle,'FontSize',largeFontSize)
-    if showLabels
-        xlabel(xlab)
-        ylabel(ylab)
-    else
-        set(gca,'YTickLabel',[],'XTickLabel',[])
-    end
-    xlim(xlims)
-    ylim(ylims)
-    cb = colorbar;
-    caxis([0 zMax]);
-    temp = (cb.Ticks' ./ 1e-6);
-    for ii = 1:numel(temp)
-       cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
-    end
-    hold off
-
-    view(2)
-    pbaspect([1 1 1])
-    drawnow
-
-    % Create our filename
-    plotFile = [savePath filesep 'Fig2-' saveLabel '-' exampleCellType{i_file}];
-
-    % Using exportgraphics() for Higher Quality
-    saveas(mapPlotWindow,[plotFile '.fig'])
-    exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-    exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+%     % Plot our topography and save it
+%     % Clear old figures if they exist
+%     if ~exist('mapPlotWindow','var')
+%         mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+%     else
+%         try
+%             figure(mapPlotWindow)
+%             clf
+%             mapPlotWindow.Position = [figX figY figWid figHeight];
+%         catch
+%             mapPlotWindow = figure('Position',[figX figY figWid figHeight]);
+%         end
+%     end
+% 
+%     plotTitle = 'Topography';
+%     saveLabel = 'Topography';
+% 
+%     surf(XPlot,YPlot,mapDataHeight,mapDataHeight,'EdgeColor','interp')
+%     ax = gca;
+%     colormap(ax,mapColorName)
+%     hold on
+%     grid on
+%     box(ax,boxSetting)
+%     set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+%     title(plotTitle,'FontSize',largeFontSize)
+%     if showLabels
+%         xlabel(xlab,'FontSize',mediumFontSize)
+%         ylabel(ylab,'FontSize',mediumFontSize)
+%     else
+%         set(gca,'YTickLabel',[],'XTickLabel',[])
+%     end
+%     xlim(xlims)
+%     ylim(ylims)
+%     cb = colorbar;
+%     caxis([0 zMax]);
+%     temp = (cb.Ticks' ./ 1e-6);
+%     for ii = 1:numel(temp)
+%        cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
+%     end
+%     hold off
+% 
+%     view(2)
+%     pbaspect([1 1 1])
+%     drawnow
+% 
+%     % Create our filename
+%     plotFile = [savePath filesep 'Fig2-' saveLabel '-' exampleCellType{i_file}];
+% 
+%     % Using exportgraphics() for Higher Quality
+%     saveas(mapPlotWindow,[plotFile '.fig'])
+%     exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+%     exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
     
     clearvars resultsStruct
 
 end
 
 fprintf('complete!\n');
+
+%% Figure 3 Settings
+colorList = turbo(10);        % Colors for Plotting
 
 %% Figure 3
 % In this figure, we show how applying an unsupervised machine learning
@@ -1272,7 +1476,7 @@ else
 end
 
 % Loop through our sublots to create them
-for i_plot = 1:5
+for i_plot = 1:4
 
     figure(mapPlotWindow)
     clf
@@ -1284,17 +1488,75 @@ for i_plot = 1:5
             saveLabel = 'Topography';
             
         case 2
-            mapData = mapDataStorageExample;
-            plotTitle = 'Storage Modulus';
-            saveLabel = 'Storage';
+            mapData = mapDataTargetExample;
+            switch clusterTarget
+                case 'force'
+                    plotTitle = 'Force';
+                    saveLabel = 'Force';
+                case 'indentation'
+                    plotTitle = 'Indentation';
+                    saveLabel = 'Indentation';
+                case 'storage'
+                    plotTitle = 'Storage Modulus';
+                    saveLabel = 'Storage';
+                case 'loss'
+                    plotTitle = 'Loss Modulus';
+                    saveLabel = 'Loss';
+                case 'angle'
+                    plotTitle = 'Loss Angle';
+                    saveLabel = 'Angle';
+                case 'relaxance'
+                    plotTitle = 'Relaxance';
+                    saveLabel = 'Relaxance';
+            end
 
         case 3
-            mapData = mapDataCluster2DExample;
+            % We want to order the clusters for this map according to
+            % increasing magnitude (softest to largest) so all of our
+            % clusters are aligned between the maps.
+            uniqueBins = unique(mapDataCluster2DExample(~isnan(mapDataCluster2DExample)));
+            medVal = NaN(size(uniqueBins));
+            for k_align = 1:length(uniqueBins)
+                % Grab our bin values at the frequency we will be plotting!
+                % Then, we can find the median of that bin and use it to
+                % sort our bin labels in increasing order.
+                tempData = mapDataCluster2DExample(mapDataCluster2DExample == uniqueBins(k_align));
+                medVal(k_align) = median(tempData,'omitnan');
+            end
+            [~,idold] = sort(medVal);
+            idnew = uniqueBins(idold);
+            clusterDataTemp = NaN(size(mapDataCluster2DExample));
+            for k_align = 1:length(idold)
+                % Reorganize our data according to the new order
+                clusterDataTemp(mapDataCluster2DExample == idold(k_align)) = idnew(k_align);
+            end
+            mapData = clusterDataTemp;
+%             mapData = mapDataCluster2DExample;
             plotTitle = 'Locally-Observed Clusters';
             saveLabel = 'SoloCluster';
 
         case 4
-            mapData = mapDataGlobalCluster2DExample;
+            % We want to order the clusters for this map according to
+            % increasing magnitude (softest to largest) so all of our
+            % clusters are aligned between the maps.
+            uniqueBins = unique(mapDataGlobalCluster2DExample(~isnan(mapDataGlobalCluster2DExample)));
+            medVal = NaN(size(uniqueBins));
+            for k_align = 1:length(uniqueBins)
+                % Grab our bin values at the frequency we will be plotting!
+                % Then, we can find the median of that bin and use it to
+                % sort our bin labels in increasing order.
+                tempData = mapDataGlobalCluster2DExample(mapDataGlobalCluster2DExample == uniqueBins(k_align));
+                medVal(k_align) = median(tempData,'omitnan');
+            end
+            [~,idold] = sort(medVal);
+            idnew = uniqueBins(idold);
+            clusterDataTemp = NaN(size(mapDataGlobalCluster2DExample));
+            for k_align = 1:length(idold)
+                % Reorganize our data according to the new order
+                clusterDataTemp(mapDataGlobalCluster2DExample == idold(k_align)) = idnew(k_align);
+            end
+            mapData = clusterDataTemp;
+%             mapData = mapDataGlobalCluster2DExample;
             plotTitle = 'Globally-Observed Clusters';
             saveLabel = 'GlobalCluster';
 
@@ -1302,19 +1564,27 @@ for i_plot = 1:5
 
     surf(XPlotExample,YPlotExample,mapDataHeightExample,...
         mapData,'EdgeColor','interp')
-    colormap(ax,mapColorName)
+    ax = gca;
+    if any(i_plot == [3,4])
+        colormap(ax,colorList)
+    else
+        colormap(ax,mapColorName)
+    end
     hold on
+    grid on
     box(ax,boxSetting)
-    title(plotTitle,'FontSize',largeFontSize)
+    set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
+    cb = colorbar;
+    set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
     if showLabels
-        xlabel(xlabExample)
-        ylabel(ylabExample)
+        title(plotTitle,'FontSize',largeFontSize)
+        xlabel(xlabExample,'FontSize',mediumFontSize)
+        ylabel(ylabExample,'FontSize',mediumFontSize)
     else
         set(gca,'YTickLabel',[],'XTickLabel',[])
     end
     xlim(xlimsExample)
     ylim(ylimsExample)
-    cb = colorbar;
     switch i_plot
         case 1
             caxis([0 zMax]);
@@ -1323,36 +1593,59 @@ for i_plot = 1:5
                cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
             end
             
-            % Add our marker for where the example plots came from!
-            scatter3(xpos,ypos,mapDataHeight(xpos,ypos),25,'rs')
-            
         case 2
-            caxis([0 climInd]);
-            temp = (cb.Ticks' ./ 1e-9);
-            for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
+            switch clusterTarget
+                case 'force'
+                    caxis([0 climForce]);
+                    temp = (cb.Ticks' ./ 1e-12);
+                    for ii = 1:numel(temp)
+                       cb.TickLabels{ii} = sprintf('%g pN',temp(ii));
+                    end
+                case 'indentation'
+                    caxis([0 climInd]);
+                    temp = (cb.Ticks' ./ 1e-9);
+                    for ii = 1:numel(temp)
+                       cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
+                    end
+                case 'storage'
+                    caxis([0 climMax]);
+                    temp = (cb.Ticks' .* 1e-3);
+                    for ii = 1:numel(temp)
+                       cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+                    end
+                case 'loss'
+                    caxis([0 climMax]);
+                    temp = (cb.Ticks' .* 1e-3);
+                    for ii = 1:numel(temp)
+                       cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+                    end
+                case 'angle'
+                    cb.Ruler.TickLabelFormat='%g Deg';
+                    caxis([0 90]);
+                case 'relaxance'
+                    caxis([0 climMax]);
+                    temp = (cb.Ticks' .* 1e-3);
+                    for ii = 1:numel(temp)
+                       cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+                    end
             end
-        
-        case 3
-            caxis([0 climMax]);
-            temp = (cb.Ticks' .* 1e-3);
+                    
+        case {3,4}
+%             caxis([1 max(unique(mapData(~isnan(mapData))))]);
+            caxis([0 size(colorList,1)]);
+            temp = cb.Ticks';
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
+               cb.TickLabels{ii} = sprintf('Bin %d',round(temp(ii)));
             end
-
-        case 4
-            caxis([0 climMax]);
-            temp = (cb.Ticks' .* 1e-3);
-            for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%d kPa',temp(ii));
-            end
-
-        case 5
-            cb.Ruler.TickLabelFormat='%g Deg';
-            caxis([0 90]);
+            
+            % Remove the 0-point
+            cb.TickLabels{1} = [];
+            
+            % Shift the labels
+            cb.Ticks = cb.Ticks - 0.5;
 
     end
-        
+    
     hold off
     
     view(2)
@@ -1364,8 +1657,8 @@ for i_plot = 1:5
     
     % Using exportgraphics() for Higher Quality
     saveas(mapPlotWindow,[plotFile '.fig'])
-    exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-    exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+    exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+    exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
 
 end
 
@@ -1373,9 +1666,16 @@ fprintf('complete!\n');
 
 %% Figure 4 Data Selections
 clusterCellTypes = {'HEMa','HFF','A375P','A375M1','A375M2'};    % Cell Type to use
-evalPt = 5e2;                                                   % Frequency for evaluating maps
-colorList = hsv(10);                                            % Colors for Plotting
-nBins = 100;                                                    % Number of bins for the histogram
+evalPt = 1e3;                                                   % Frequency for evaluating maps
+nBins = 150;                                                    % Number of bins for the histogram
+climMaxHist = 15e3;                                             % Pa, maximum stress to show on histogram
+
+% % Grab bin designations
+% [~,sheet_names] = xlsfinfo('binLabels.xlsx');
+% binLabels = cell(numel(sheet_names),1);
+% for k = 1:numel(sheet_names)
+%   [~,~,binLabels{k}] = readtable('binLabels.xlsx',sheet_names{k});
+% end
 
 %% Figure 4
 % This figure shows a histogram comparison of the cell types by several
@@ -1406,7 +1706,7 @@ fprintf('\nGenerating Figure 4...');
 for i_dir = 1:length(clusterCellTypes)
     
     % Search recursively (using "**") for our zTransform results files
-    Files = dir(fullfile(originalPath, '**',...
+    Files = dir(fullfile(clusterPath, '**',...
         ['*' clusterCellTypes{i_dir} '*Results*zTransform*.mat']));
 
     if isempty(Files)
@@ -1418,6 +1718,24 @@ for i_dir = 1:length(clusterCellTypes)
     minFreq = Inf;
     maxFreq = 0;
     mapsizes = NaN(numel(Files),1);
+    
+    % Prepare our index records
+    ai = NaN(numel(Files),1);
+    bi = NaN(numel(Files),1);
+    for j_dir = 1:length(Files)
+        resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
+        mapsizes(j_dir) = numel(resultsStruct.zTransformAnalysis.frequencyMap);
+        clearvars resultsStruct
+    end
+    
+    for j_dir = 1:numel(mapsizes)
+        if j_dir == 1
+            ai(j_dir) = 1;
+        else
+            ai(j_dir) = bi(j_dir-1) + 1;
+        end
+        bi(j_dir) = ai(j_dir) + mapsizes(j_dir) - 1;
+    end
 
     for j_dir = 1:length(Files)
         
@@ -1427,15 +1745,13 @@ for i_dir = 1:length(clusterCellTypes)
         % If there are any other analysis results...skip them! This is
         % primarily for compatibility later, in case a new analysis type is
         % proposed in the future.    
-        j = find(strcmpi(varNames,'zTransform'));
+        j = find(contains(varNames,'zTransform'));
         
         % Load the mat file
         resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
         freqMapTemp = resultsStruct.(varNames{j}).frequencyMap;
         timesCellTemp = resultsStruct.(varNames{j}).ViscoClass.times_cell;
         clearvars resultsStruct
-
-        mapsizes(j_dir) = numel(freqMapTemp);
 
         for k_pixels = 1:numel(freqMapTemp)
             tempf = freqMapTemp{k_pixels};
@@ -1474,12 +1790,12 @@ for i_dir = 1:length(clusterCellTypes)
     else
         while temp < maxFreq
             if temp == minFreq
-                dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_freqs);
+                dFreq = 10^(ceil(log10(temp)))/n_steps;
             end
 
             if temp >= tempmax
                 tempmax = temp*10;
-                dFreq = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_freqs);
+                dFreq = 10^(ceil(log10(temp)))/n_steps;
             end
 
             tempf = 10.^( ( log10(temp) ) );
@@ -1490,18 +1806,7 @@ for i_dir = 1:length(clusterCellTypes)
     magList = unique(magList);
     freqList = flip(magList);
     timeList = 1./freqList;
-                
-    % Prepare our index records
-    ai = NaN(numel(Files),1);
-    bi = NaN(numel(Files),1);
-    for j_dir = 1:length(Files)
-        if j_dir == 1
-            ai(j_dir) = 1;
-        else
-            ai(j_dir) = bi(j_dir-1) + 1;
-        end
-        bi(j_dir) = ai(j_dir) + mapsizes(j_dir) - 1;
-    end
+    
 %     clusteringDataGlobal = NaN(bi(end),numel(magList));
     XDataGlobal = NaN(bi(end),1);
     YDataGlobal = NaN(bi(end),1);
@@ -1518,12 +1823,23 @@ for i_dir = 1:length(clusterCellTypes)
         % If there are any other analysis results...skip them! This is
         % primarily for compatibility later, in case a new analysis type is
         % proposed in the future.    
-        j = find(strcmpi(varNames,'zTransform'));
+        j = find(contains(varNames,'zTransform'));
         
         if isfield(resultsStruct.(varNames{j}),'mapSize')
             mapSize = resultsStruct.(varNames{j}).mapSize;
         else
             mapSize = [128 128];
+        end
+        
+        % Grab some relevant settings
+        try
+            correctTilt = resultsStruct.(varNames{j}).correctTilt;
+            hideSubstrate = resultsStruct.(varNames{j}).hideSubstrate;
+            zeroSubstrate = resultsStruct.(varNames{j}).zeroSubstrate;
+            optimizeFlattening = resultsStruct.(varNames{j}).optimizeFlattening;
+        catch
+            hideSubstrate = true;
+            warning('The variables hideSubstrate, correctTilt, zeroSubstrate, and optimizeFlattening were not found in the results file. Using hard-coded settings in generatePaperFigures() (all set to true).');
         end
 
         if isfield(resultsStruct.(varNames{j}),'scanSize')
@@ -1549,7 +1865,7 @@ for i_dir = 1:length(clusterCellTypes)
             pixelHeightArray = cell2mat(pixelHeight_cell);
         end
 
-        [minHeight,~] = min(pixelHeightArray);
+        [minHeight,~] = min(pixelHeightArray(pixelHeightArray>0));
         substrateCutoff = minHeight + trimHeight;
         pixelsToRemove = false(size(pixelHeightArray));
         pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
@@ -1601,6 +1917,7 @@ for i_dir = 1:length(clusterCellTypes)
 
 %         clusteringData = NaN(numel(pixelHeightArray),numel(magList));
         pixelLog = NaN(numel(pixelHeightArray),2);
+        histXData = NaN(numel(pixelHeightArray),1);
 
         for k_pixels = 1:numel(pixelHeightArray)
 
@@ -1722,33 +2039,29 @@ for i_dir = 1:length(clusterCellTypes)
         end
 
         cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
-        histYData = cell2mat(resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap)';
+        histYData = reshape(resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap2D,bi(j_dir)-(ai(j_dir)-1),1);
 
         % We want to order the clusters for this map according to
         % increasing magnitude (softest to largest) so all of our
         % clusters are aligned between the maps.
-        uniqueBins = unique(histYData);
+        uniqueBins = unique(histYData(~isnan(histYData)));
         medVal = NaN(size(uniqueBins));
         for k_align = 1:length(uniqueBins)
-
             % Grab our bin values at the frequency we will be plotting!
             % Then, we can find the median of that bin and use it to
             % sort our bin labels in increasing order.
             tempData = histXData(histYData == uniqueBins(k_align));
             medVal(k_align) = median(tempData,'omitnan');
-
         end
         [~,idold] = sort(medVal);
         idnew = uniqueBins(idold);
         histYDataTemp = NaN(size(histYData));
         for k_align = 1:length(idold)
-
             % Reorganize our data according to the new order
             histYDataTemp(histYData == idold(k_align)) = idnew(k_align);
-
         end
         histYData = histYDataTemp;
-            
+
         % Concatenate our Clustering Data from this map and save
         % the indices for this particular file
         pixelLogGlobal(ai(j_dir):bi(j_dir),:) = pixelLog;
@@ -1756,12 +2069,11 @@ for i_dir = 1:length(clusterCellTypes)
 %         clusteringDataGlobal(ai(j_dir):bi(j_dir),:) = clusteringData;
         XDataGlobal(ai(j_dir):bi(j_dir),:) = histXData;
         YDataGlobal(ai(j_dir):bi(j_dir),:) = histYData;
-            
+
         clearvars resultsStruct mapSize histXData histYData histYDataTemp ...
             pixelLog
 
     end
-        
     fprintf('complete!\n');
         
     % Now, go through and save the results to each output file and make
@@ -1770,60 +2082,134 @@ for i_dir = 1:length(clusterCellTypes)
     
     % Clear old figures if they exist
     if ~exist('mapPlotWindow','var')
-        mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight]);
+        mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight*0.6]);
     else
         try
             figure(mapPlotWindow)
             clf
-            mapPlotWindow.Position = [figX figY figWid*2 figHeight];
+            mapPlotWindow.Position = [figX figY figWid*2 figHeight*0.6];
         catch
-            mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight]);
+            mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight*0.6]);
         end
     end
     
     % Now, begin making our histogram
-    uniqueBins = unique(YDataGlobal);
+    uniqueBins = unique(YDataGlobal(~isnan(YDataGlobal)));
     hi = gobjects(numel(uniqueBins),1);
-    binEdges = linspace(0,climMax,nBins+1);
-    hold on
-    for i_plot = 1:numel(uniqueBins)
-        % Create our histogram
-        hi(i_plot) = histogram(histXData(histYData == uniqueBins(i_plot)),...
-            'BinEdges', binEdges,...
-            'FaceColor', colorList(i_plot,:),...
-            'FaceAlpha', 0.5,...
-            'EdgeColor', [0 0 0],...
-            'EdgeAlpha', 0.5);
-        
-        % Plot a normal distribution over the top
-        [mu,sigma] = normfit(hi(i_plot).Values);
-        xvals = binEdges(1:end-1) + diff(binEdges)/2;
-        yvals = exp(-(hi(i_plot).Values-mu).^2./(2*sigma^2))./(sigma*sqrt(2*pi));
-        plot(xvals,yvals,'Color',colorList(i_plot,:),'LineWidth',5)
-    end
-    grid on
-    xlim([0 climMax])
+    ax = gca;
     
-    if i_dir == length(clusterCellTypes)
-        switch clusterTarget
-            case 'force'
-                xlab = sprintf('Force [N]');
-            case 'indentation'
-                xlab = sprintf('Indentation [\\mum]');
-            case 'storage'
-                xlab = sprintf('Storage Modulus [Pa]');
-            case 'loss'
-                xlab = sprintf('Loss Modulus [Pa]');
-            case 'angle'
-                xlab = sprintf('Loss Angle [deg]');
-            case 'relaxance'
-                xlab = sprintf('Relaxance [Pa]');
-        end
-        xlabel(xlab, 'FontSize', mediumFontSize)
-        ylabel('Number of Pixels', 'FontSize', mediumFontSize)
-    else
-        ylabel('Number of Pixels', 'FontSize', mediumFontSize)
+    % Determine plot order
+    pixCount = zeros(size(uniqueBins));
+    for i_plot = 1:numel(uniqueBins)
+        % We don't want to hide any smaller distributions! So we have to
+        % plot from largest-to-smallest histogram (like stacking blocks).
+        % This way, we hope, none of the distributions are hidden but they
+        % are still labeled correctly.
+        pixCount(i_plot) = sum(YDataGlobal == uniqueBins(i_plot));
     end
+    [~,sortid] = sort(pixCount,'descend');
+    uniqueBins = uniqueBins(sortid);
+    
+    binEdges = linspace(0,climMaxHist,nBins+1);
+%     binEdges = linspace(0,climMax,nBins+1);
+    hold on
+    grid on
+    for i_plot = 1:numel(uniqueBins)
+        
+        if exist('binLabels','var')
+            % Find out which color to use
+            % THIS CODE NEEDS TO BE TESTED!!!
+            
+            sheetidx = find(strcmpi(sheet_names,clusterCellTypes{i_dir})); % Pick the right sheet for this type of cell
+            temp = find(binLabels{1}{:,2}==binLabels{sheetidx}{uniqueBins(i_plot),2}); % Find the name of this bin in the first sheet (roster)
+            colorID = binLabels{1}{temp,1}; % Pick the "bin number" associated with that name
+        else
+            colorID = uniqueBins(i_plot);
+        end
+        
+        % Create our histogram
+        hi(i_plot) = histogram(XDataGlobal(YDataGlobal == uniqueBins(i_plot)),...
+            'BinEdges', binEdges,...
+            'FaceColor', colorList(colorID,:),...
+            'FaceAlpha', 0.9,...
+            'EdgeColor', colorList(colorID,:),...
+            'EdgeAlpha', 0.5);
+%             'FaceColor', colorList(colorID,:),...
+%             'FaceAlpha', 0.5,...
+%             'EdgeColor', [0 0 0],...
+%             'EdgeAlpha', 0.5);
+        
+%         % Plot a normal distribution over the top
+%         [mu,sigma] = normfit(hi(i_plot).Values);
+%         xvals = binEdges(1:end-1) + diff(binEdges)/2;
+%         yvals = max(hi(i_plot).Values,[],'all').*exp(-(hi(i_plot).Values-mu).^2./(2*sigma^2))./(sigma*sqrt(2*pi));
+%         plot(xvals,yvals,'Color',colorList(i_plot,:),'LineWidth',1,'HandleVisibility','off')
+    end
+    box(ax,boxSetting)
+    set(gca,'TickLength',[0.01 0.01],'LineWidth',2)
+    set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
+    
+    switch clusterTarget
+        case 'force'
+            xlim([0 climForce])
+            xlab = sprintf('Force [pN]');
+            temp = (xticks' ./ 1e-12);
+            TickLabels = cell(size(temp));
+            for ii = 1:numel(temp)
+               TickLabels{ii} = sprintf('%d',round(temp(ii)));
+            end
+            xticklabels(TickLabels)
+        case 'indentation'
+            xlim([0 climInd])
+            xlab = sprintf('Indentation [\\mum]');
+            temp = (xticks' ./ 1e-6);
+            TickLabels = cell(size(temp));
+            for ii = 1:numel(temp)
+               TickLabels{ii} = sprintf('%g',temp(ii));
+            end
+            xticklabels(TickLabels)
+        case 'storage'
+            xlim([0 climMaxHist])
+            xlab = sprintf('Storage Modulus [kPa]');
+            temp = (xticks' .* 1e-3);
+            TickLabels = cell(size(temp));
+            for ii = 1:numel(temp)
+               TickLabels{ii} = sprintf('%d',round(temp(ii)));
+            end
+            xticklabels(TickLabels)
+        case 'loss'
+            xlim([0 climMaxHist])
+            xlab = sprintf('Loss Modulus [kPa]');
+            temp = (xticks' .* 1e-3);
+            TickLabels = cell(size(temp));
+            for ii = 1:numel(temp)
+               TickLabels{ii} = sprintf('%d',round(temp(ii)));
+            end
+            xticklabels(TickLabels)
+        case 'angle'
+            xlim([0 90])
+            xlab = sprintf('Loss Angle [deg]');
+        case 'relaxance'
+            xlim([0 climMaxHist])
+            xlab = sprintf('Relaxance [kPa]');
+            temp = (xticks' .* 1e-3);
+            TickLabels = cell(size(temp));
+            for ii = 1:numel(temp)
+               TickLabels{ii} = sprintf('%d',round(temp(ii)));
+            end
+            xticklabels(TickLabels)
+    end
+    ylabel('Number of Pixels', 'FontSize', mediumFontSize)
+
+    if i_dir == length(clusterCellTypes)
+        xlabel(xlab, 'FontSize', mediumFontSize)
+    else
+        set(gca,'Xticklabel',[])
+    end
+    
+    legendEntries = sprintfc('Bin %d',uniqueBins);
+    [~,sortidx] = sort(uniqueBins,'ascend');
+    legend(hi(sortidx),legendEntries(sortidx),'location','eastoutside')
     
     hold off
     
@@ -1832,8 +2218,8 @@ for i_dir = 1:length(clusterCellTypes)
     
     % Using exportgraphics() for Higher Quality
     saveas(mapPlotWindow,[plotFile '.fig'])
-    exportgraphics(ax,[plotFile '.jpg'],'Resolution',300);
-    exportgraphics(ax,[plotFile '.png'],'Resolution',300);
+    exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+    exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
     
     fprintf('complete for %s!\n',clusterCellTypes{i_dir});
     

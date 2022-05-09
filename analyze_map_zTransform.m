@@ -249,7 +249,7 @@ for i_dir = 1:length(Folders)
             extractionSettings.N_workers = N_workers;                   % Pass the number of workers to the fitting
             extractionSettings.hideSubstrate = viscoZ.hideSubstrate;    % Remove pixels designated as "substrate" from the visco fitting
             extractionSettings.windowsize = 0.05;                       % Window size for smoothing methods
-            extractionSettings.smoothOpt = 'none';                      % Which smoothing setting to use on the harmonics.
+            extractionSettings.smoothOpt = 'ma-time';                   % Which smoothing setting to use on the harmonics.
                                                                         % Options: none, g-time, ma-time, g-hz, ma-hz
                                                                         % *-time smooths before z-transform. *-hz will
                                                                         % smooth after z-transforming F and h.
@@ -269,6 +269,8 @@ for i_dir = 1:length(Folders)
             zTransformAnalysis.smoothOpt = extractionSettings.smoothOpt;
             zTransformAnalysis.correctTilt = classSettings.correctTilt;
             zTransformAnalysis.hideSubstrate = extractionSettings.hideSubstrate;
+            zTransformAnalysis.zeroSubstrate = classSettings.zeroSubstrate;
+            zTransformAnalysis.optimizeFlattening = classSettings.optimizeFlattening;
             zTransformAnalysis.thinSample = classSettings.thinSample;
             save([path filesep savePrepend fileID{mapidx} '_MapResults_zTransform.mat'],'zTransformAnalysis','-v7.3')
             clearvars zTransformAnalysis

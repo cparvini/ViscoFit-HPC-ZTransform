@@ -10,6 +10,7 @@ function [heightOut] = fixMapTilt(mapSizeList,pixelHeightList,zeroSubstrate,vara
 
 fitOrder = 1;
 optimizeOrder = false;
+percentImprove = 0.1;
 if nargin > 3
     if ~isempty(varargin)
         for i = 1:numel(varargin)
@@ -21,6 +22,10 @@ if nargin > 3
                 case 2
                     if ~isempty(varargin{i})
                         optimizeOrder = varargin{i};                        
+                    end
+                case 3
+                    if ~isempty(varargin{i})
+                        percentImprove = varargin{i}/100;                        
                     end
                 otherwise
                     fprintf('Passed additional parameters to fit_map() which were not used.');
@@ -38,13 +43,17 @@ if iscell(mapSize)
 end
 
 % axes meshgrid for scattering data
+em1 = floor(mapSize(1)/20);
+em2 = floor(mapSize(2)/20);
+% em1 = 1;
+% em2 = 1;
 xdata = 1:mapSize(1);
 ydata = flip(1:mapSize(2));
 [X, Y] = meshgrid(xdata,ydata);
 Z = reshape([pixelHeightList{:}],mapSize);
 Mask2D = false(size(Z));
-Mask2D(:,[1,end]) = true;
-Mask2D([1,end],:) = true;
+Mask2D(:,[1:em2,(end-em2):end]) = true;
+Mask2D([1:em1,(end-em1):end],:) = true;
 
 % Includes substrate pixels
 Mask2D(Z - min(Z,[],'all') < 100e-9) = true;
@@ -67,7 +76,7 @@ y(ids) = [];
 z(ids) = [];
 
 % Now, screen the heights for outliers as well
-ids = isoutlier(z,'percentiles',[1 99]);
+ids = isoutlier(z,'percentiles',[5 95]);
 x(ids) = [];
 y(ids) = [];
 z(ids) = [];
@@ -95,7 +104,7 @@ if optimizeOrder
             tempRes = gof.adjrsquare;
 
             % If this iteration improves the error, save the zShift
-            if tempRes < fitRes
+            if tempRes < fitRes*(1-percentImprove)
                 zShift = zShiftTemp;
                 fitOrd = {ii,jj};
             end
@@ -126,14 +135,15 @@ end
 
 if zeroSubstrate
     heightOut = cell2mat(pixelHeightList)+zShift';
-    heightOut = num2cell(heightOut-min(heightOut,[],'all'));
+%     heightOut = num2cell(heightOut-min(heightOut,[],'all'));
+    heightOut = num2cell(heightOut-min(heightOut(heightOut>0),[],'all'));
 else
     heightOut = num2cell(cell2mat(pixelHeightList)+zShift');
 end
 
 % % Test Plot
 % figure
-% scatter3(x,y,z,'bo')
+% % scatter3(x,y,z,'bo')
 % hold on
 % % scatter3(x(isoutlier(z)),y(isoutlier(z)),z(isoutlier(z)),'rx')
 % surf(X,Y,reshape(feval(sf,[reshape(X,numel(pixelHeightList),1),reshape(Y,numel(pixelHeightList),1)]),size(Z)))

@@ -45,7 +45,7 @@ maxwid = get(0,'screensize');
 maxwid = maxwid(3);
 titleFontSize = 14;
 axisFontSize = 14;
-n_steps = 10; % frames, number of frames per order of magnitude
+n_steps = 50; % frames, number of frames per order of magnitude
 
 % Check to see if there are subdirectories
 dirContents = dir(originalPath);
@@ -156,12 +156,12 @@ for i_dir = 1:length(Folders)
         else
             while temp < maxTime
                 if temp == minTime
-                    dt = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_steps);
+                    dt = 10^(ceil(log10(temp)))/n_steps;
                 end
 
                 if temp >= tempmax
                     tempmax = temp*10;
-                    dt = ((10^(ceil(log10(temp)))-10^(floor(log10(temp))))/n_steps);
+                    dt = 10^(ceil(log10(temp)))/n_steps;
                 end
 
                 tempt = 10.^( ( log10(temp) ) );

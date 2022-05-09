@@ -11,10 +11,7 @@ function [] = singleMapConsensusClustering(originalPath,N_workers,clusterTarget,
 %   purposes.
 
 % User-Defined Settings
-correctTilt = true;
 hideSubstrate = true;
-zeroSubstrate = true;
-optimizeFlattening = false;
 fillPixels = true;
 logSteps = true;
 plotIndentation = true;
@@ -27,41 +24,29 @@ if nargin > 1
             switch i
                 case 1
                     if ~isempty(varargin{i})
-                        correctTilt = varargin{i};                        
+                        hideSubstrate = varargin{i};
                     end
                 case 2
                     if ~isempty(varargin{i})
-                        hideSubstrate = varargin{i};
+                        fillPixels = varargin{i};                        
                     end
                 case 3
                     if ~isempty(varargin{i})
-                        zeroSubstrate = varargin{i};                        
+                        logSteps = varargin{i};                        
                     end
                 case 4
                     if ~isempty(varargin{i})
-                        optimizeFlattening = varargin{i};                        
+                        plotIndentation = varargin{i};                        
                     end
                 case 5
                     if ~isempty(varargin{i})
-                        fillPixels = varargin{i};                        
+                        evalPt = varargin{i};                        
                     end
                 case 6
                     if ~isempty(varargin{i})
-                        logSteps = varargin{i};                        
-                    end
-                case 7
-                    if ~isempty(varargin{i})
-                        plotIndentation = varargin{i};                        
-                    end
-                case 8
-                    if ~isempty(varargin{i})
-                        evalPt = varargin{i};                        
-                    end
-                case 9
-                    if ~isempty(varargin{i})
                         n_reps = varargin{i};                        
                     end
-                case 10
+                case 7
                     if ~isempty(varargin{i})
                         maxK = varargin{i};                        
                     end
@@ -86,7 +71,7 @@ climHeight = 15e-6; % meters, the JPK Nanowizard has a 15um piezo
 climInd = 1000e-9; % meters
 trimHeight = 100e-9;
 dFreq = 200; % Hz, step size between frames, if discrete
-n_freqs = 10; % frames, number of frames per order of magnitude
+n_freqs = 50; % frames, number of frames per order of magnitude
 n_datapoints = 10;
 clusterTargetList = {'force','indentation','storage','loss','relaxance'};
 
@@ -166,6 +151,11 @@ for i_dir = 1:length(Folders)
                     mapSize = [128 128];
                 end
                 
+                % Grab some relevant settings
+                correctTilt = resultsStruct.(varNames{j}).correctTilt;
+                zeroSubstrate = resultsStruct.(varNames{j}).zeroSubstrate;
+                optimizeFlattening = resultsStruct.(varNames{j}).optimizeFlattening;
+
                 if isfield(resultsStruct.(varNames{j}),'scanSize')
                     % We have the absolute map size!
                     scanSize = resultsStruct.(varNames{j}).scanSize;
@@ -279,7 +269,7 @@ for i_dir = 1:length(Folders)
                     pixelHeightArray = cell2mat(pixelHeight_cell);
                 end
 
-                [minHeight,~] = min(pixelHeightArray);
+                [minHeight,~] = min(pixelHeightArray(pixelHeightArray>0));
                 substrateCutoff = minHeight + trimHeight;
                 pixelsToRemove = false(size(pixelHeightArray));
                 pixelsToRemove(pixelHeightArray <= substrateCutoff) = true;
