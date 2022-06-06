@@ -91,9 +91,10 @@ trimHeight = 100e-9;
 dFreq = 200; % Hz, step size between frames
 n_steps = 100; % frames, number of frames per order of magnitude
 n_datapoints = 10;
-smallFontSize = 16;
-mediumFontSize = 24;
-largeFontSize = 32;
+tinyFontSize = 16;
+smallFontSize = 28;
+mediumFontSize = 36;
+largeFontSize = 48;
 
 % Placeholders if our file doesn't have these settings
 correctTilt = true;
@@ -521,9 +522,12 @@ if exist('XA','var') && exist('YA','var')
     XPlot = XA./1e-6;
     xlab = sprintf('X Position [\\mum]');
     xlims = [0 max(scanSize)./1e-6];
+    XAExample = XPlot;
     YPlot = YA./1e-6;
     ylab = sprintf('Y Position [\\mum]');
     ylims = [0 max(scanSize)./1e-6];
+    YAExample = YPlot;
+    scanSizeExample = scanSize;
 else
     XPlot = X;
     xlab = 'X Index';
@@ -616,7 +620,7 @@ grid on
 box(ax,boxSetting)
 set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
 set( findall(gca, '-property', 'fontsize'), 'fontsize', smallFontSize)
-xlabel('Frequency [$$Hz$$]','Interpreter','latex','FontSize',mediumFontSize)
+xlabel('Frequency [$$kHz$$]','Interpreter','latex','FontSize',mediumFontSize)
 xlim([0 max(freq_example)])
 ylabel('Force [$$Arb.$$]','Interpreter','latex','FontSize',mediumFontSize)
 % ylim([0 1.1*max(F_hz_example)])
@@ -682,7 +686,7 @@ grid on
 box(ax,boxSetting)
 set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
 set( findall(gca, '-property', 'fontsize'), 'fontsize', smallFontSize)
-xlabel('Frequency [$$Hz$$]','Interpreter','latex','FontSize',mediumFontSize)
+xlabel('Frequency [$$kHz$$]','Interpreter','latex','FontSize',mediumFontSize)
 xlim([0 max(freq_example)])
 ylabel('Storage Modulus [$$kPa$$]','Interpreter','latex','FontSize',mediumFontSize)
 ylim([0 max(tempMax)])
@@ -706,18 +710,18 @@ grid on
 box(ax,boxSetting)
 set(gca,'TickLength',[0.02 0.02],'LineWidth',2)
 
+xlim([0 max(freq_example)])
+ylabel('Loss Modulus [$$kPa$$]','Interpreter','latex','FontSize',mediumFontSize)
+ylim([0 max(tempMax)])
+view(2)
+hold off
+
 temp = (yticks' ./ 1e3);
 TickLabels = cell(size(temp));
 for ii = 1:numel(temp)
    TickLabels{ii} = sprintf('%d',round(temp(ii)));
 end
 yticklabels(TickLabels)
-
-xlim([0 max(freq_example)])
-ylabel('Loss Modulus [$$kPa$$]','Interpreter','latex','FontSize',mediumFontSize)
-ylim([0 max(tempMax)])
-view(2)
-hold off
 
 temp = (xticks' ./ 1e3);
 TickLabels = cell(size(temp));
@@ -805,7 +809,7 @@ for i_plot = 1:5
             caxis([0 zMax]);
             temp = (cb.Ticks' ./ 1e-6);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
+               cb.TickLabels{ii} = sprintf('%g',temp(ii)); % \\mum
             end
             scaleBarMax = zMax;
             
@@ -816,7 +820,7 @@ for i_plot = 1:5
             caxis([0 climInd]);
             temp = (cb.Ticks' ./ 1e-9);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
+               cb.TickLabels{ii} = sprintf('%g',temp(ii)); % nm
             end
             scaleBarMax = climInd;
         
@@ -824,7 +828,7 @@ for i_plot = 1:5
             caxis([0 climMax]);
             temp = (cb.Ticks' .* 1e-3);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+               cb.TickLabels{ii} = sprintf('%d',round(temp(ii))); % kPa
             end
             scaleBarMax = climMax;
 
@@ -832,13 +836,14 @@ for i_plot = 1:5
             caxis([0 climMax]);
             temp = (cb.Ticks' .* 1e-3);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+               cb.TickLabels{ii} = sprintf('%d',round(temp(ii))); % kPa
             end
             scaleBarMax = climMax;
 
         case 5
-            cb.Ruler.TickLabelFormat='%g Deg';
+            cb.Ruler.TickLabelFormat='%g'; % Deg
             caxis([0 90]);
+            cb.Ticks = [0 30 60 90];
             scaleBarMax = 90;
 
     end
@@ -853,7 +858,7 @@ for i_plot = 1:5
         text(xbar(1),ybar(1),zbar(1),sprintf('%d \\mum',barsize),...
             'HorizontalAlignment','left',...
             'VerticalAlignment','top',...
-            'FontSize',mediumFontSize);
+            'FontSize',smallFontSize);
         
         xlim(xlims)
         ylim(xlims)
@@ -913,7 +918,7 @@ fprintf('complete!\n');
 exampleCellType = {'HEMa','HFF','A375P','A375M1','A375M2'};     % Cell Type to use
 exampleCellDish = {2, 1, 1, 2 ,1};                              % Dish Number of Type
 exampleCellNumber = {2, 1, 1, 1, 1};                            % Cell Number in Dish
-evalPt = [5e2, 1e3, 5e3, 10e3, 50e3];                           % Frequency for evaluating maps
+evalPt = [5e2, 1e3, 5e3, 10e3, 25e3, 50e3];                     % Frequency for evaluating maps
 dataOrder = {'topo','storage','loss','angle'};                  % Order (L > R, Top > Bottom) to plot observables in quad
 
 %% Figure 2
@@ -1344,7 +1349,7 @@ for i_file = 1:numel(exampleCellType)
                 text(xbar(1),ybar(1),zbar(1),sprintf('%d \\mum',barsize),...
                     'HorizontalAlignment','left',...
                     'VerticalAlignment','top',...
-                    'FontSize',smallFontSize);
+                    'FontSize',tinyFontSize);
 
                 xlim(xlims)
                 ylim(xlims)
@@ -1590,8 +1595,9 @@ for i_plot = 1:4
             caxis([0 zMax]);
             temp = (cb.Ticks' ./ 1e-6);
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('%g \\mum',temp(ii));
+               cb.TickLabels{ii} = sprintf('%g',temp(ii)); % \\mum
             end
+            scaleBarMax = zMax;
             
         case 2
             switch clusterTarget
@@ -1599,43 +1605,51 @@ for i_plot = 1:4
                     caxis([0 climForce]);
                     temp = (cb.Ticks' ./ 1e-12);
                     for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%g pN',temp(ii));
+                       cb.TickLabels{ii} = sprintf('%g',temp(ii)); % pN
                     end
+                    scaleBarMax = climForce;
                 case 'indentation'
                     caxis([0 climInd]);
                     temp = (cb.Ticks' ./ 1e-9);
                     for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%g nm',temp(ii));
+                       cb.TickLabels{ii} = sprintf('%g',temp(ii)); % nm
                     end
+                    scaleBarMax = climInd;
                 case 'storage'
                     caxis([0 climMax]);
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+                       cb.TickLabels{ii} = sprintf('%d',round(temp(ii))); % kPa
                     end
+                    scaleBarMax = climMax;
                 case 'loss'
                     caxis([0 climMax]);
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+                       cb.TickLabels{ii} = sprintf('%d',round(temp(ii))); % kPa
                     end
+                    scaleBarMax = climMax;
                 case 'angle'
-                    cb.Ruler.TickLabelFormat='%g Deg';
+                    cb.Ruler.TickLabelFormat='%g'; % Deg
                     caxis([0 90]);
+                    cb.Ticks = [0 30 60 90];
+                    scaleBarMax = 90;
                 case 'relaxance'
                     caxis([0 climMax]);
                     temp = (cb.Ticks' .* 1e-3);
                     for ii = 1:numel(temp)
-                       cb.TickLabels{ii} = sprintf('%d kPa',round(temp(ii)));
+                       cb.TickLabels{ii} = sprintf('%d',round(temp(ii))); % kPa
                     end
+                    scaleBarMax = climMax;
             end
                     
         case {3,4}
 %             caxis([1 max(unique(mapData(~isnan(mapData))))]);
             caxis([0 size(colorList,1)]);
+            cb.Ticks = 0:size(colorList,1);
             temp = cb.Ticks';
             for ii = 1:numel(temp)
-               cb.TickLabels{ii} = sprintf('Bin %d',round(temp(ii)));
+               cb.TickLabels{ii} = sprintf('%d',round(temp(ii)));
             end
             
             % Remove the 0-point
@@ -1645,10 +1659,40 @@ for i_plot = 1:4
             cb.Ticks = cb.Ticks - 0.5;
 
     end
-    
-    hold off
-    
+        
     view(2)
+    
+    if showScaleBar && exist('XAExample','var') && exist('YAExample','var')
+        
+        xlims = [0 max(scanSizeExample)./1e-6];
+        
+        barsize = 10^ceil(log10(max(xlims))-1);
+        xbar = [(1/20)*xlims(2) (1/20)*xlims(2)+barsize];
+        ybar = ones(size(xbar))*(1/10)*xlims(2);
+        zbar = ones(size(ybar))*scaleBarMax;
+        plot3(xbar,ybar,zbar,'-k','LineWidth',5)
+        text(xbar(1),ybar(1),zbar(1),sprintf('%d \\mum',barsize),...
+            'HorizontalAlignment','left',...
+            'VerticalAlignment','top',...
+            'FontSize',smallFontSize);
+
+        xlim(xlims)
+        ylim(xlims)
+%         zlim([0 scaleBarMax])
+    end
+
+    hold off
+    view(2)
+
+    if any(diff(yticks) ~= barsize)
+        temp = yticks;
+        yticks(ax,temp(1):barsize:temp(end))
+    end
+    if any(diff(xticks) ~= barsize)
+        temp = xticks;
+        xticks(ax,temp(1):barsize:temp(end))
+    end
+    
     pbaspect([1 1 1])
     drawnow
 
@@ -1667,8 +1711,8 @@ fprintf('complete!\n');
 %% Figure 4 Data Selections
 clusterCellTypes = {'HEMa','HFF','A375P','A375M1','A375M2'};    % Cell Type to use
 evalPt = 1e3;                                                   % Frequency for evaluating maps
-nBins = 150;                                                    % Number of bins for the histogram
-climMaxHist = 15e3;                                             % Pa, maximum stress to show on histogram
+% nBins = 5000;                                                   % Number of bins for the histogram
+climMaxHist = 20e3;                                          % Pa, maximum stress to show on histogram
 
 % % Grab bin designations
 % [~,sheet_names] = xlsfinfo('binLabels.xlsx');
@@ -2110,8 +2154,23 @@ for i_dir = 1:length(clusterCellTypes)
     [~,sortid] = sort(pixCount,'descend');
     uniqueBins = uniqueBins(sortid);
     
-    binEdges = linspace(0,climMaxHist,nBins+1);
-%     binEdges = linspace(0,climMax,nBins+1);
+    % Create and trim our data
+    histDatasetTemp = XDataGlobal;
+    switch clusterTarget
+        case 'force'
+            histMax = climForce;
+        case 'indentation'
+            histMax = climInd;
+        case {'storage','loss','relaxance'}
+            histMax = climMaxHist;
+        case 'angle'
+            histMax = 90;
+    end
+    histDatasetTemp(histDatasetTemp > histMax | histDatasetTemp < 0) = [];
+    [~,binEdges] = histcounts(histDatasetTemp,...
+        'BinMethod','scott');
+    clearvars histDatasetTemp
+    
     hold on
     grid on
     for i_plot = 1:numel(uniqueBins)
@@ -2127,8 +2186,16 @@ for i_dir = 1:length(clusterCellTypes)
             colorID = uniqueBins(i_plot);
         end
         
+        % Create and trim our data
+        histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot));
+        histDataset(histDataset > histMax | histDataset < 0) = [];
+%         dBin = (max(histDataset) - min(histDataset))/numel(binCounts);
+%         nBins = numel(binCounts); % Adjust the number using the resolution predicted by histcounts
+%         binEdges = linspace(0,climMaxHist,nBins+1);
+%         binEdges = linspace(0,climMax,nBins+1);
+
         % Create our histogram
-        hi(i_plot) = histogram(XDataGlobal(YDataGlobal == uniqueBins(i_plot)),...
+        hi(i_plot) = histogram(histDataset,...
             'BinEdges', binEdges,...
             'FaceColor', colorList(colorID,:),...
             'FaceAlpha', 0.9,...
@@ -2207,7 +2274,7 @@ for i_dir = 1:length(clusterCellTypes)
         set(gca,'Xticklabel',[])
     end
     
-    legendEntries = sprintfc('Bin %d',uniqueBins);
+    legendEntries = sprintfc('%d',uniqueBins);
     [~,sortidx] = sort(uniqueBins,'ascend');
     legend(hi(sortidx),legendEntries(sortidx),'location','eastoutside')
     
