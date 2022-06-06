@@ -1511,6 +1511,7 @@ for i_plot = 1:4
                     plotTitle = 'Loss Angle';
                     saveLabel = 'Angle';
                 case 'relaxance'
+                    mapData = abs(mapDataTargetExample);
                     plotTitle = 'Relaxance';
                     saveLabel = 'Relaxance';
             end
