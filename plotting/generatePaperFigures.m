@@ -1711,7 +1711,7 @@ fprintf('complete!\n');
 
 %% Figure 4 Data Selections
 clusterCellTypes = {'HEMa','HFF','A375P','A375M1','A375M2'};    % Cell Type to use
-evalPt = 1e3;                                                   % Frequency for evaluating maps
+evalPt = [1e3 10e3];                                                   % Frequency for evaluating maps
 % nBins = 5000;                                                   % Number of bins for the histogram
 climMaxHist = climMax;                                          % Pa, maximum stress to show on main histogram
 climMaxHistAll = {[0 20e3],[90e3 110e3],[180e3 200e3]};         % Pa, limits of subplots to generate for each histogram            
@@ -1854,13 +1854,14 @@ for i_dir = 1:length(clusterCellTypes)
     timeList = 1./freqList;
     
 %     clusteringDataGlobal = NaN(bi(end),numel(magList));
-    XDataGlobal = NaN(bi(end),1);
+    XDataGlobal = NaN(bi(end),length(evalPt));
     YDataGlobal = NaN(bi(end),1);
     pixelLogGlobal = NaN(bi(end),2);
     mapIDglobal = NaN(bi(end),1);
                 
     % Now, loop through the files and create our dataset
     fprintf('\nPopulating our global clustering dataset No. %d of %d...',i_dir,length(clusterCellTypes));
+        
     for j_dir = 1:length(Files)
 
         resultsStruct = load([Files(j_dir).folder filesep Files(j_dir).name],'-mat');
@@ -1870,13 +1871,13 @@ for i_dir = 1:length(clusterCellTypes)
         % primarily for compatibility later, in case a new analysis type is
         % proposed in the future.    
         j = find(contains(varNames,'zTransform'));
-        
+
         if isfield(resultsStruct.(varNames{j}),'mapSize')
             mapSize = resultsStruct.(varNames{j}).mapSize;
         else
             mapSize = [128 128];
         end
-        
+
         % Grab some relevant settings
         try
             correctTilt = resultsStruct.(varNames{j}).correctTilt;
@@ -1961,9 +1962,8 @@ for i_dir = 1:length(clusterCellTypes)
 
         end
 
-%         clusteringData = NaN(numel(pixelHeightArray),numel(magList));
         pixelLog = NaN(numel(pixelHeightArray),2);
-        histXData = NaN(numel(pixelHeightArray),1);
+        histXData = NaN(numel(pixelHeightArray),length(evalPt));
 
         for k_pixels = 1:numel(pixelHeightArray)
 
@@ -2066,9 +2066,12 @@ for i_dir = 1:length(clusterCellTypes)
 %                 obsOut = interp1(xinterp,clusterInterp,obsList,'makima',...
 %                     NaN);
 %                 clusteringData(k_pixels,:) = obsOut;
-                obsOut = interp1(xinterp,clusterInterp,evalPt,'makima',...
-                    NaN);
-                histXData(k_pixels) = obsOut;
+
+                for i_eval = 1:length(evalPt)
+                    obsOut = interp1(xinterp,clusterInterp,evalPt(i_eval),'makima',...
+                        NaN);
+                    histXData(k_pixels,i_eval) = obsOut;
+                end
             catch
                 % Do nothing
             end
@@ -2087,34 +2090,41 @@ for i_dir = 1:length(clusterCellTypes)
         cid = find(strcmp({resultsStruct.(varNames{j}).clusterData.clusterVar}, clusterTarget));
         histYData = reshape(resultsStruct.(varNames{j}).clusterData(cid).globalClusterMap2D,bi(j_dir)-(ai(j_dir)-1),1);
 
-        % We want to order the clusters for this map according to
-        % increasing magnitude (softest to largest) so all of our
-        % clusters are aligned between the maps.
-        uniqueBins = unique(histYData(~isnan(histYData)));
-        medVal = NaN(size(uniqueBins));
-        for k_align = 1:length(uniqueBins)
-            % Grab our bin values at the frequency we will be plotting!
-            % Then, we can find the median of that bin and use it to
-            % sort our bin labels in increasing order.
-            tempData = histXData(histYData == uniqueBins(k_align));
-            medVal(k_align) = median(tempData,'omitnan');
-        end
-        [~,idold] = sort(medVal);
-        idnew = uniqueBins(idold);
-        histYDataTemp = NaN(size(histYData));
-        for k_align = 1:length(idold)
-            % Reorganize our data according to the new order
-            histYDataTemp(histYData == idold(k_align)) = idnew(k_align);
-        end
-        histYData = histYDataTemp;
+        
+%         for i_eval = 1:length(evalPt)
+            
+            % We want to order the clusters for this map according to
+            % increasing magnitude (softest to largest) so all of our
+            % clusters are aligned between the maps.
+            uniqueBins = unique(histYData(~isnan(histYData)));
+            medVal = NaN(size(uniqueBins));
+            for k_align = 1:length(uniqueBins)
+                % Grab our bin values at the frequency we will be plotting!
+                % Then, we can find the median of that bin and use it to
+                % sort our bin labels in increasing order. For more than 1
+                % evalPt, we baseline on the first frequency.
+                tempData = histXData(histYData == uniqueBins(k_align),1);
+%                 tempData = histXData(histYData == uniqueBins(k_align),i_eval);
+                medVal(k_align) = median(tempData,'omitnan');
+            end
+            [~,idold] = sort(medVal);
+            idnew = uniqueBins(idold);
+            histYDataTemp = NaN(size(histYData));
+            for k_align = 1:length(idold)
+                % Reorganize our data according to the new order
+                histYDataTemp(histYData == idold(k_align)) = idnew(k_align);
+            end
+            histYData = histYDataTemp;
 
-        % Concatenate our Clustering Data from this map and save
-        % the indices for this particular file
-        pixelLogGlobal(ai(j_dir):bi(j_dir),:) = pixelLog;
-        mapIDglobal(ai(j_dir):bi(j_dir)) = j_dir;
-%         clusteringDataGlobal(ai(j_dir):bi(j_dir),:) = clusteringData;
-        XDataGlobal(ai(j_dir):bi(j_dir),:) = histXData;
-        YDataGlobal(ai(j_dir):bi(j_dir),:) = histYData;
+            % Concatenate our Clustering Data from this map and save
+            % the indices for this particular file
+            pixelLogGlobal(ai(j_dir):bi(j_dir),:) = pixelLog;
+            mapIDglobal(ai(j_dir):bi(j_dir)) = j_dir;
+    %         clusteringDataGlobal(ai(j_dir):bi(j_dir),:) = clusteringData;
+            XDataGlobal(ai(j_dir):bi(j_dir),:) = histXData;
+            YDataGlobal(ai(j_dir):bi(j_dir),:) = histYData;
+            
+%         end
 
         clearvars resultsStruct mapSize histXData histYData histYDataTemp ...
             pixelLog
@@ -2122,188 +2132,24 @@ for i_dir = 1:length(clusterCellTypes)
     end
     fprintf('complete! The %s dataset contains %d pixels.\n',...
         clusterCellTypes{i_dir},size(XDataGlobal,1));
-        
+
     % Now, go through and save the results to each output file and make
     % our plots!
     fprintf('\nGenerating our histogram plots...');
-    
-    % Clear old figures if they exist
-    if ~exist('mapPlotWindow','var')
-        mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight*0.6]);
-    else
-        try
-            figure(mapPlotWindow)
-            clf
-            mapPlotWindow.Position = [figX figY figWid*2 figHeight*0.6];
-        catch
-            mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight*0.6]);
-        end
-    end
-    
-    % Now, begin making our histogram
-    uniqueBins = unique(YDataGlobal(~isnan(YDataGlobal)));
-    hi = gobjects(numel(uniqueBins),1);
-    ax = gca;
-    
-    % Determine plot order
-    pixCount = zeros(size(uniqueBins));
-    for i_plot = 1:numel(uniqueBins)
-        % We don't want to hide any smaller distributions! So we have to
-        % plot from largest-to-smallest histogram (like stacking blocks).
-        % This way, we hope, none of the distributions are hidden but they
-        % are still labeled correctly.
-        pixCount(i_plot) = sum(YDataGlobal == uniqueBins(i_plot));
-    end
-    [~,sortid] = sort(pixCount,'descend');
-    uniqueBins = uniqueBins(sortid);
-    
-    % Create and trim our data
-    histDatasetTemp = XDataGlobal;
-    switch clusterTarget
-        case 'force'
-            histMax = climForce;
-        case 'indentation'
-            histMax = climInd;
-        case {'storage','loss','relaxance'}
-            histMax = climMaxHist;
-        case 'angle'
-            histMax = 90;
-    end
-    histDatasetTemp(histDatasetTemp > histMax | histDatasetTemp < 0) = [];
-    [~,binEdges] = histcounts(histDatasetTemp,...
-        'BinMethod','scott');
-    clearvars histDatasetTemp
-    
-    hold on
-    grid on
-    for i_plot = 1:numel(uniqueBins)
-        
-        if exist('binLabels','var')
-            % Find out which color to use
-            % THIS CODE NEEDS TO BE TESTED!!!
-            
-            sheetidx = find(strcmpi(sheet_names,clusterCellTypes{i_dir})); % Pick the right sheet for this type of cell
-            temp = find(binLabels{1}{:,2}==binLabels{sheetidx}{uniqueBins(i_plot),2}); % Find the name of this bin in the first sheet (roster)
-            colorID = binLabels{1}{temp,1}; % Pick the "bin number" associated with that name
-        else
-            colorID = uniqueBins(i_plot);
-        end
-        
-        % Create and trim our data
-        histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot));
-        histDataset(histDataset > histMax | histDataset < 0) = [];
-%         dBin = (max(histDataset) - min(histDataset))/numel(binCounts);
-%         nBins = numel(binCounts); % Adjust the number using the resolution predicted by histcounts
-%         binEdges = linspace(0,climMaxHist,nBins+1);
-%         binEdges = linspace(0,climMax,nBins+1);
 
-        % Create our histogram
-        hi(i_plot) = histogram(histDataset,...
-            'BinEdges', binEdges,...
-            'FaceColor', colorList(colorID,:),...
-            'FaceAlpha', 0.9,...
-            'EdgeColor', colorList(colorID,:),...
-            'EdgeAlpha', 0.5);
-%             'FaceColor', colorList(colorID,:),...
-%             'FaceAlpha', 0.5,...
-%             'EdgeColor', [0 0 0],...
-%             'EdgeAlpha', 0.5);
-        
-%         % Plot a normal distribution over the top
-%         [mu,sigma] = normfit(hi(i_plot).Values);
-%         xvals = binEdges(1:end-1) + diff(binEdges)/2;
-%         yvals = max(hi(i_plot).Values,[],'all').*exp(-(hi(i_plot).Values-mu).^2./(2*sigma^2))./(sigma*sqrt(2*pi));
-%         plot(xvals,yvals,'Color',colorList(i_plot,:),'LineWidth',1,'HandleVisibility','off')
-    end
-    box(ax,boxSetting)
-    set(gca,'TickLength',[0.01 0.01],'LineWidth',2)
-    set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
+    % Loop through all the eval points
+    for i_eval = 1:length(evalPt)
     
-    switch clusterTarget
-        case 'force'
-            xlim([0 climForce])
-            xlab = sprintf('Force [pN]');
-            temp = (xticks' ./ 1e-12);
-            TickLabels = cell(size(temp));
-            for ii = 1:numel(temp)
-               TickLabels{ii} = sprintf('%d',round(temp(ii)));
-            end
-            xticklabels(TickLabels)
-        case 'indentation'
-            xlim([0 climInd])
-            xlab = sprintf('Indentation [\\mum]');
-            temp = (xticks' ./ 1e-6);
-            TickLabels = cell(size(temp));
-            for ii = 1:numel(temp)
-               TickLabels{ii} = sprintf('%g',temp(ii));
-            end
-            xticklabels(TickLabels)
-        case 'storage'
-            xlim([0 climMaxHist])
-            xlab = sprintf('Storage Modulus [kPa]');
-            temp = (xticks' .* 1e-3);
-            TickLabels = cell(size(temp));
-            for ii = 1:numel(temp)
-               TickLabels{ii} = sprintf('%d',round(temp(ii)));
-            end
-            xticklabels(TickLabels)
-        case 'loss'
-            xlim([0 climMaxHist])
-            xlab = sprintf('Loss Modulus [kPa]');
-            temp = (xticks' .* 1e-3);
-            TickLabels = cell(size(temp));
-            for ii = 1:numel(temp)
-               TickLabels{ii} = sprintf('%d',round(temp(ii)));
-            end
-            xticklabels(TickLabels)
-        case 'angle'
-            xlim([0 90])
-            xlab = sprintf('Loss Angle [deg]');
-        case 'relaxance'
-            xlim([0 climMaxHist])
-            xlab = sprintf('Relaxance [kPa]');
-            temp = (xticks' .* 1e-3);
-            TickLabels = cell(size(temp));
-            for ii = 1:numel(temp)
-               TickLabels{ii} = sprintf('%d',round(temp(ii)));
-            end
-            xticklabels(TickLabels)
-    end
-    ylabel('Number of Pixels', 'FontSize', mediumFontSize)
-
-    if i_dir == length(clusterCellTypes)
-        xlabel(xlab, 'FontSize', mediumFontSize)
-    else
-        set(gca,'Xticklabel',[])
-    end
-    
-    legendEntries = sprintfc('%d',uniqueBins);
-    [~,sortidx] = sort(uniqueBins,'ascend');
-    legend(hi(sortidx),legendEntries(sortidx),'location','eastoutside')
-    
-    hold off
-    
-    % Create our filename
-    plotFile = [savePath filesep 'Fig4-' clusterCellTypes{i_dir}];
-    
-    % Using exportgraphics() for Higher Quality
-    saveas(mapPlotWindow,[plotFile '.fig'])
-    exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
-    exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
-    
-    % Now, do the same thing for all the subplots
-    for i_subs = 1:length(climMaxHistAll)
-       
         % Clear old figures if they exist
         if ~exist('mapPlotWindow','var')
-            mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+            mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight*0.6]);
         else
             try
                 figure(mapPlotWindow)
                 clf
-                mapPlotWindow.Position = [figX figY figWid*1.6 figHeight];
+                mapPlotWindow.Position = [figX figY figWid*2 figHeight*0.6];
             catch
-                mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+                mapPlotWindow = figure('Position',[figX figY figWid*2 figHeight*0.6]);
             end
         end
 
@@ -2325,9 +2171,18 @@ for i_dir = 1:length(clusterCellTypes)
         uniqueBins = uniqueBins(sortid);
 
         % Create and trim our data
-        histDatasetTemp = XDataGlobal;
-        histMax = climMaxHistAll{i_subs};
-        histDatasetTemp(histDatasetTemp > histMax(1) | histDatasetTemp < histMax(2)) = [];
+        histDatasetTemp = XDataGlobal(:,i_eval);
+        switch clusterTarget
+            case 'force'
+                histMax = climForce;
+            case 'indentation'
+                histMax = climInd;
+            case {'storage','loss','relaxance'}
+                histMax = climMaxHist;
+            case 'angle'
+                histMax = 90;
+        end
+        histDatasetTemp(histDatasetTemp > histMax | histDatasetTemp < 0) = [];
         [~,binEdges] = histcounts(histDatasetTemp,...
             'BinMethod','scott');
         clearvars histDatasetTemp
@@ -2336,9 +2191,24 @@ for i_dir = 1:length(clusterCellTypes)
         grid on
         for i_plot = 1:numel(uniqueBins)
 
+            if exist('binLabels','var')
+                % Find out which color to use
+                % THIS CODE NEEDS TO BE TESTED!!!
+
+                sheetidx = find(strcmpi(sheet_names,clusterCellTypes{i_dir})); % Pick the right sheet for this type of cell
+                temp = find(binLabels{1}{:,2}==binLabels{sheetidx}{uniqueBins(i_plot),2}); % Find the name of this bin in the first sheet (roster)
+                colorID = binLabels{1}{temp,1}; % Pick the "bin number" associated with that name
+            else
+                colorID = uniqueBins(i_plot);
+            end
+
             % Create and trim our data
-            histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot));
-            histDataset(histDataset > histMax(1) | histDataset < histMax(2)) = [];
+            histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot),i_eval);
+            histDataset(histDataset > histMax | histDataset < 0) = [];
+    %         dBin = (max(histDataset) - min(histDataset))/numel(binCounts);
+    %         nBins = numel(binCounts); % Adjust the number using the resolution predicted by histcounts
+    %         binEdges = linspace(0,climMaxHist,nBins+1);
+    %         binEdges = linspace(0,climMax,nBins+1);
 
             % Create our histogram
             hi(i_plot) = histogram(histDataset,...
@@ -2347,7 +2217,16 @@ for i_dir = 1:length(clusterCellTypes)
                 'FaceAlpha', 0.9,...
                 'EdgeColor', colorList(colorID,:),...
                 'EdgeAlpha', 0.5);
-            
+    %             'FaceColor', colorList(colorID,:),...
+    %             'FaceAlpha', 0.5,...
+    %             'EdgeColor', [0 0 0],...
+    %             'EdgeAlpha', 0.5);
+
+    %         % Plot a normal distribution over the top
+    %         [mu,sigma] = normfit(hi(i_plot).Values);
+    %         xvals = binEdges(1:end-1) + diff(binEdges)/2;
+    %         yvals = max(hi(i_plot).Values,[],'all').*exp(-(hi(i_plot).Values-mu).^2./(2*sigma^2))./(sigma*sqrt(2*pi));
+    %         plot(xvals,yvals,'Color',colorList(i_plot,:),'LineWidth',1,'HandleVisibility','off')
         end
         box(ax,boxSetting)
         set(gca,'TickLength',[0.01 0.01],'LineWidth',2)
@@ -2355,7 +2234,7 @@ for i_dir = 1:length(clusterCellTypes)
 
         switch clusterTarget
             case 'force'
-                xlim([histMax(1) histMax(2)])
+                xlim([0 climForce])
                 xlab = sprintf('Force [pN]');
                 temp = (xticks' ./ 1e-12);
                 TickLabels = cell(size(temp));
@@ -2364,7 +2243,7 @@ for i_dir = 1:length(clusterCellTypes)
                 end
                 xticklabels(TickLabels)
             case 'indentation'
-                xlim([histMax(1) histMax(2)])
+                xlim([0 climInd])
                 xlab = sprintf('Indentation [\\mum]');
                 temp = (xticks' ./ 1e-6);
                 TickLabels = cell(size(temp));
@@ -2373,7 +2252,7 @@ for i_dir = 1:length(clusterCellTypes)
                 end
                 xticklabels(TickLabels)
             case 'storage'
-                xlim([histMax(1) histMax(2)])
+                xlim([0 climMaxHist])
                 xlab = sprintf('Storage Modulus [kPa]');
                 temp = (xticks' .* 1e-3);
                 TickLabels = cell(size(temp));
@@ -2382,7 +2261,7 @@ for i_dir = 1:length(clusterCellTypes)
                 end
                 xticklabels(TickLabels)
             case 'loss'
-                xlim([histMax(1) histMax(2)])
+                xlim([0 climMaxHist])
                 xlab = sprintf('Loss Modulus [kPa]');
                 temp = (xticks' .* 1e-3);
                 TickLabels = cell(size(temp));
@@ -2391,10 +2270,10 @@ for i_dir = 1:length(clusterCellTypes)
                 end
                 xticklabels(TickLabels)
             case 'angle'
-                xlim([histMax(1) histMax(2)])
+                xlim([0 90])
                 xlab = sprintf('Loss Angle [deg]');
             case 'relaxance'
-                xlim([histMax(1) histMax(2)])
+                xlim([0 climMaxHist])
                 xlab = sprintf('Relaxance [kPa]');
                 temp = (xticks' .* 1e-3);
                 TickLabels = cell(size(temp));
@@ -2404,17 +2283,153 @@ for i_dir = 1:length(clusterCellTypes)
                 xticklabels(TickLabels)
         end
         ylabel('Number of Pixels', 'FontSize', mediumFontSize)
-        xlabel(xlab, 'FontSize', mediumFontSize)
+
+        if i_dir == length(clusterCellTypes)
+            xlabel(xlab, 'FontSize', mediumFontSize)
+        else
+            set(gca,'Xticklabel',[])
+        end
+
+        legendEntries = sprintfc('%d',uniqueBins);
+        [~,sortidx] = sort(uniqueBins,'ascend');
+        legend(hi(sortidx),legendEntries(sortidx),'location','eastoutside')
 
         hold off
 
         % Create our filename
-        plotFile = [savePath filesep 'Fig4-' clusterCellTypes{i_dir} '-SubplotRange' sprintf('%d',i_subs)];
+        plotFile = [savePath filesep 'Fig4-' clusterCellTypes{i_dir} sprintf('-%dHz',evalPt(i_eval))];
 
         % Using exportgraphics() for Higher Quality
         saveas(mapPlotWindow,[plotFile '.fig'])
         exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
         exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
+
+        % Now, do the same thing for all the subplots
+        for i_subs = 1:length(climMaxHistAll)
+
+            % Clear old figures if they exist
+            if ~exist('mapPlotWindow','var')
+                mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+            else
+                try
+                    figure(mapPlotWindow)
+                    clf
+                    mapPlotWindow.Position = [figX figY figWid*1.6 figHeight];
+                catch
+                    mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+                end
+            end
+
+            % Now, begin making our histogram
+            uniqueBins = unique(YDataGlobal(~isnan(YDataGlobal)));
+            hi = gobjects(numel(uniqueBins),1);
+            ax = gca;
+
+            % Determine plot order
+            pixCount = zeros(size(uniqueBins));
+            for i_plot = 1:numel(uniqueBins)
+                % We don't want to hide any smaller distributions! So we have to
+                % plot from largest-to-smallest histogram (like stacking blocks).
+                % This way, we hope, none of the distributions are hidden but they
+                % are still labeled correctly.
+                pixCount(i_plot) = sum(YDataGlobal == uniqueBins(i_plot));
+            end
+            [~,sortid] = sort(pixCount,'descend');
+            uniqueBins = uniqueBins(sortid);
+
+            % Create and trim our data
+            histDatasetTemp = XDataGlobal(:,i_eval);
+            histMax = climMaxHistAll{i_subs};
+            histDatasetTemp(histDatasetTemp > histMax(1) | histDatasetTemp < histMax(2)) = [];
+            [~,binEdges] = histcounts(histDatasetTemp,...
+                'BinMethod','scott');
+            clearvars histDatasetTemp
+
+            hold on
+            grid on
+            for i_plot = 1:numel(uniqueBins)
+
+                % Create and trim our data
+                histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot),i_eval);
+                histDataset(histDataset > histMax(1) | histDataset < histMax(2)) = [];
+
+                % Create our histogram
+                hi(i_plot) = histogram(histDataset,...
+                    'BinEdges', binEdges,...
+                    'FaceColor', colorList(colorID,:),...
+                    'FaceAlpha', 0.9,...
+                    'EdgeColor', colorList(colorID,:),...
+                    'EdgeAlpha', 0.5);
+
+            end
+            box(ax,boxSetting)
+            set(gca,'TickLength',[0.01 0.01],'LineWidth',2)
+            set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
+
+            switch clusterTarget
+                case 'force'
+                    xlim([histMax(1) histMax(2)])
+                    xlab = sprintf('Force [pN]');
+                    temp = (xticks' ./ 1e-12);
+                    TickLabels = cell(size(temp));
+                    for ii = 1:numel(temp)
+                       TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                    end
+                    xticklabels(TickLabels)
+                case 'indentation'
+                    xlim([histMax(1) histMax(2)])
+                    xlab = sprintf('Indentation [\\mum]');
+                    temp = (xticks' ./ 1e-6);
+                    TickLabels = cell(size(temp));
+                    for ii = 1:numel(temp)
+                       TickLabels{ii} = sprintf('%g',temp(ii));
+                    end
+                    xticklabels(TickLabels)
+                case 'storage'
+                    xlim([histMax(1) histMax(2)])
+                    xlab = sprintf('Storage Modulus [kPa]');
+                    temp = (xticks' .* 1e-3);
+                    TickLabels = cell(size(temp));
+                    for ii = 1:numel(temp)
+                       TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                    end
+                    xticklabels(TickLabels)
+                case 'loss'
+                    xlim([histMax(1) histMax(2)])
+                    xlab = sprintf('Loss Modulus [kPa]');
+                    temp = (xticks' .* 1e-3);
+                    TickLabels = cell(size(temp));
+                    for ii = 1:numel(temp)
+                       TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                    end
+                    xticklabels(TickLabels)
+                case 'angle'
+                    xlim([histMax(1) histMax(2)])
+                    xlab = sprintf('Loss Angle [deg]');
+                case 'relaxance'
+                    xlim([histMax(1) histMax(2)])
+                    xlab = sprintf('Relaxance [kPa]');
+                    temp = (xticks' .* 1e-3);
+                    TickLabels = cell(size(temp));
+                    for ii = 1:numel(temp)
+                       TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                    end
+                    xticklabels(TickLabels)
+            end
+            ylabel('Number of Pixels', 'FontSize', mediumFontSize)
+            xlabel(xlab, 'FontSize', mediumFontSize)
+
+            hold off
+
+            % Create our filename
+            plotFile = [savePath filesep 'Fig4-' clusterCellTypes{i_dir} sprintf('-%dHz',evalPt(i_eval)) '-SubplotRange' sprintf('%d',i_subs)];
+
+            % Using exportgraphics() for Higher Quality
+            saveas(mapPlotWindow,[plotFile '.fig'])
+            exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+            exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
+
+        end
         
     end
     
