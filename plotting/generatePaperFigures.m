@@ -2120,7 +2120,8 @@ for i_dir = 1:length(clusterCellTypes)
             pixelLog
 
     end
-    fprintf('complete!\n');
+    fprintf('complete! The %s dataset contains %d pixels.\n',...
+        clusterCellTypes{i_dir},size(XDataGlobal,1));
         
     % Now, go through and save the results to each output file and make
     % our plots!
