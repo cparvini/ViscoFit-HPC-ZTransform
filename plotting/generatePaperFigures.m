@@ -1713,7 +1713,8 @@ fprintf('complete!\n');
 clusterCellTypes = {'HEMa','HFF','A375P','A375M1','A375M2'};    % Cell Type to use
 evalPt = 1e3;                                                   % Frequency for evaluating maps
 % nBins = 5000;                                                   % Number of bins for the histogram
-climMaxHist = 20e3;                                          % Pa, maximum stress to show on histogram
+climMaxHist = climMax;                                          % Pa, maximum stress to show on main histogram
+climMaxHistAll = {[0 20e3],[90e3 110e3],[180e3 200e3]};         % Pa, limits of subplots to generate for each histogram            
 
 % % Grab bin designations
 % [~,sheet_names] = xlsfinfo('binLabels.xlsx');
@@ -2123,7 +2124,7 @@ for i_dir = 1:length(clusterCellTypes)
         
     % Now, go through and save the results to each output file and make
     % our plots!
-    fprintf('\nGenerating our histogram plot...');
+    fprintf('\nGenerating our histogram plots...');
     
     % Clear old figures if they exist
     if ~exist('mapPlotWindow','var')
@@ -2288,6 +2289,133 @@ for i_dir = 1:length(clusterCellTypes)
     saveas(mapPlotWindow,[plotFile '.fig'])
     exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
     exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
+    
+    % Now, do the same thing for all the subplots
+    for i_subs = 1:length(climMaxHistAll)
+       
+        % Clear old figures if they exist
+        if ~exist('mapPlotWindow','var')
+            mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+        else
+            try
+                figure(mapPlotWindow)
+                clf
+                mapPlotWindow.Position = [figX figY figWid*1.6 figHeight];
+            catch
+                mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+            end
+        end
+
+        % Now, begin making our histogram
+        uniqueBins = unique(YDataGlobal(~isnan(YDataGlobal)));
+        hi = gobjects(numel(uniqueBins),1);
+        ax = gca;
+
+        % Determine plot order
+        pixCount = zeros(size(uniqueBins));
+        for i_plot = 1:numel(uniqueBins)
+            % We don't want to hide any smaller distributions! So we have to
+            % plot from largest-to-smallest histogram (like stacking blocks).
+            % This way, we hope, none of the distributions are hidden but they
+            % are still labeled correctly.
+            pixCount(i_plot) = sum(YDataGlobal == uniqueBins(i_plot));
+        end
+        [~,sortid] = sort(pixCount,'descend');
+        uniqueBins = uniqueBins(sortid);
+
+        % Create and trim our data
+        histDatasetTemp = XDataGlobal;
+        histMax = climMaxHistAll{i_subs};
+        histDatasetTemp(histDatasetTemp > histMax(1) | histDatasetTemp < histMax(2)) = [];
+        [~,binEdges] = histcounts(histDatasetTemp,...
+            'BinMethod','scott');
+        clearvars histDatasetTemp
+
+        hold on
+        grid on
+        for i_plot = 1:numel(uniqueBins)
+
+            % Create and trim our data
+            histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot));
+            histDataset(histDataset > histMax(1) | histDataset < histMax(2)) = [];
+
+            % Create our histogram
+            hi(i_plot) = histogram(histDataset,...
+                'BinEdges', binEdges,...
+                'FaceColor', colorList(colorID,:),...
+                'FaceAlpha', 0.9,...
+                'EdgeColor', colorList(colorID,:),...
+                'EdgeAlpha', 0.5);
+            
+        end
+        box(ax,boxSetting)
+        set(gca,'TickLength',[0.01 0.01],'LineWidth',2)
+        set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
+
+        switch clusterTarget
+            case 'force'
+                xlim([histMax(1) histMax(2)])
+                xlab = sprintf('Force [pN]');
+                temp = (xticks' ./ 1e-12);
+                TickLabels = cell(size(temp));
+                for ii = 1:numel(temp)
+                   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                end
+                xticklabels(TickLabels)
+            case 'indentation'
+                xlim([histMax(1) histMax(2)])
+                xlab = sprintf('Indentation [\\mum]');
+                temp = (xticks' ./ 1e-6);
+                TickLabels = cell(size(temp));
+                for ii = 1:numel(temp)
+                   TickLabels{ii} = sprintf('%g',temp(ii));
+                end
+                xticklabels(TickLabels)
+            case 'storage'
+                xlim([histMax(1) histMax(2)])
+                xlab = sprintf('Storage Modulus [kPa]');
+                temp = (xticks' .* 1e-3);
+                TickLabels = cell(size(temp));
+                for ii = 1:numel(temp)
+                   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                end
+                xticklabels(TickLabels)
+            case 'loss'
+                xlim([histMax(1) histMax(2)])
+                xlab = sprintf('Loss Modulus [kPa]');
+                temp = (xticks' .* 1e-3);
+                TickLabels = cell(size(temp));
+                for ii = 1:numel(temp)
+                   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                end
+                xticklabels(TickLabels)
+            case 'angle'
+                xlim([histMax(1) histMax(2)])
+                xlab = sprintf('Loss Angle [deg]');
+            case 'relaxance'
+                xlim([histMax(1) histMax(2)])
+                xlab = sprintf('Relaxance [kPa]');
+                temp = (xticks' .* 1e-3);
+                TickLabels = cell(size(temp));
+                for ii = 1:numel(temp)
+                   TickLabels{ii} = sprintf('%d',round(temp(ii)));
+                end
+                xticklabels(TickLabels)
+        end
+        ylabel('Number of Pixels', 'FontSize', mediumFontSize)
+        xlabel(xlab, 'FontSize', mediumFontSize)
+
+        hold off
+
+        % Create our filename
+        plotFile = [savePath filesep 'Fig4-' clusterCellTypes{i_dir} '-SubplotRange' sprintf('%d',i_subs)];
+
+        % Using exportgraphics() for Higher Quality
+        saveas(mapPlotWindow,[plotFile '.fig'])
+        exportgraphics(mapPlotWindow,[plotFile '.jpg'],'Resolution',300);
+        exportgraphics(mapPlotWindow,[plotFile '.png'],'Resolution',300);
+        
+    end
     
     fprintf('complete for %s!\n',clusterCellTypes{i_dir});
     
