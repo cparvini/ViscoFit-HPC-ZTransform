@@ -2309,14 +2309,14 @@ for i_dir = 1:length(clusterCellTypes)
 
             % Clear old figures if they exist
             if ~exist('mapPlotWindow','var')
-                mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+                mapPlotWindow = figure('Position',[figX figY figWid*1.4 figHeight*0.8]);
             else
                 try
                     figure(mapPlotWindow)
                     clf
-                    mapPlotWindow.Position = [figX figY figWid*1.6 figHeight];
+                    mapPlotWindow.Position = [figX figY figWid*1.4 figHeight*0.8];
                 catch
-                    mapPlotWindow = figure('Position',[figX figY figWid*1.6 figHeight]);
+                    mapPlotWindow = figure('Position',[figX figY figWid*1.4 figHeight*0.8]);
                 end
             end
 
@@ -2325,6 +2325,15 @@ for i_dir = 1:length(clusterCellTypes)
             hi = gobjects(numel(uniqueBins),1);
             ax = gca;
 
+            % Create and trim our data
+            histDatasetTemp = XDataGlobal(:,i_eval);
+            histBinTemp = YDataGlobal;
+            histMax = climMaxHistAll{i_subs};
+            histBinTemp(histDatasetTemp < histMax(1) | histDatasetTemp > histMax(2)) = [];
+            histDatasetTemp(histDatasetTemp < histMax(1) | histDatasetTemp > histMax(2)) = [];
+            [~,binEdges] = histcounts(histDatasetTemp,...
+                'BinMethod','scott');
+            
             % Determine plot order
             pixCount = zeros(size(uniqueBins));
             for i_plot = 1:numel(uniqueBins)
@@ -2332,17 +2341,12 @@ for i_dir = 1:length(clusterCellTypes)
                 % plot from largest-to-smallest histogram (like stacking blocks).
                 % This way, we hope, none of the distributions are hidden but they
                 % are still labeled correctly.
-                pixCount(i_plot) = sum(YDataGlobal == uniqueBins(i_plot));
+%                 pixCount(i_plot) = sum(YDataGlobal == uniqueBins(i_plot));
+                pixCount(i_plot) = sum(histBinTemp == uniqueBins(i_plot));
             end
             [~,sortid] = sort(pixCount,'descend');
             uniqueBins = uniqueBins(sortid);
-
-            % Create and trim our data
-            histDatasetTemp = XDataGlobal(:,i_eval);
-            histMax = climMaxHistAll{i_subs};
-            histDatasetTemp(histDatasetTemp > histMax(1) | histDatasetTemp < histMax(2)) = [];
-            [~,binEdges] = histcounts(histDatasetTemp,...
-                'BinMethod','scott');
+            
             clearvars histDatasetTemp
 
             hold on
@@ -2351,14 +2355,14 @@ for i_dir = 1:length(clusterCellTypes)
 
                 % Create and trim our data
                 histDataset = XDataGlobal(YDataGlobal == uniqueBins(i_plot),i_eval);
-                histDataset(histDataset > histMax(1) | histDataset < histMax(2)) = [];
+                histDataset(histDataset < histMax(1) | histDataset > histMax(2)) = [];
 
                 % Create our histogram
                 hi(i_plot) = histogram(histDataset,...
                     'BinEdges', binEdges,...
-                    'FaceColor', colorList(colorID,:),...
+                    'FaceColor', colorList(uniqueBins(i_plot),:),...
                     'FaceAlpha', 0.9,...
-                    'EdgeColor', colorList(colorID,:),...
+                    'EdgeColor', colorList(uniqueBins(i_plot),:),...
                     'EdgeAlpha', 0.5);
 
             end
