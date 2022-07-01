@@ -1,0 +1,15 @@
+# Cluster Melanocytes, Melanoma, and Fibroblasts Swarm (No Fitting, No Compiler)
+# Swarm command:
+# swarm -t 56 -g 128 -f kun-globalCluster_swarm.swarm --module=matlab --time 10-00:00:00 --gres=lscratch:100 --job-name globalClusterLoss --logdir /home/dok2/logs --merge-output --sbatch "--mail-type=FAIL"
+# To debug first and test what SLURM sees:
+# swarm -t 56 -g 128 --devel -f kun-globalCluster_swarm.swarm --module=matlab --time 10-00:00:00 --gres=lscratch:100 --job-name globalClusterLoss --logdir /home/dok2/logs --merge-output --sbatch "--mail-type=FAIL"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/dok2/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/dok2/ViscoFitZ-HPC/A375P/'; globalMapClustering(startDir,28,'loss',1,0,1,0,1000,20,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/dok2/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/dok2/ViscoFitZ-HPC/A375M1/'; globalMapClustering(startDir,28,'loss',1,0,1,0,1000,20,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/dok2/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/dok2/ViscoFitZ-HPC/A375M2/'; globalMapClustering(startDir,28,'loss',1,0,1,0,1000,20,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/dok2/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/dok2/ViscoFitZ-HPC/HFF/'; globalMapClustering(startDir,28,'loss',1,0,1,0,1000,20,10); exit;"
+export MCR_CACHE_ROOT=/lscratch/$SLURM_JOB_ID; \
+ matlab -nosplash -r "cd /home/dok2/ViscoFit-HPC-ZTransform; addpath(genpath('lib')); addpath(genpath('plotting')); startDir='/data/dok2/ViscoFitZ-HPC/HEMa/'; globalMapClustering(startDir,28,'loss',1,0,1,0,1000,20,10); exit;"

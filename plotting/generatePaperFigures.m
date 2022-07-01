@@ -2185,6 +2185,7 @@ for i_dir = 1:length(clusterCellTypes)
         histDatasetTemp(histDatasetTemp > histMax | histDatasetTemp < 0) = [];
         [~,binEdges] = histcounts(histDatasetTemp,...
             'BinMethod','scott');
+%         [~,binEdges] = histcounts(histDatasetTemp,20); % Manual number of bins
         clearvars histDatasetTemp
 
         hold on
@@ -2282,7 +2283,7 @@ for i_dir = 1:length(clusterCellTypes)
                 end
                 xticklabels(TickLabels)
         end
-        ylabel('Number of Pixels', 'FontSize', mediumFontSize)
+%         ylabel('Number of Pixels', 'FontSize', mediumFontSize)
 
         if i_dir == length(clusterCellTypes)
             xlabel(xlab, 'FontSize', mediumFontSize)
@@ -2331,8 +2332,11 @@ for i_dir = 1:length(clusterCellTypes)
             histMax = climMaxHistAll{i_subs};
             histBinTemp(histDatasetTemp < histMax(1) | histDatasetTemp > histMax(2)) = [];
             histDatasetTemp(histDatasetTemp < histMax(1) | histDatasetTemp > histMax(2)) = [];
-            [~,binEdges] = histcounts(histDatasetTemp,...
+            [Nbin,binEdges] = histcounts(histDatasetTemp,...
                 'BinMethod','scott');
+            if numel(Nbin) < 20
+                [~,binEdges] = histcounts(histDatasetTemp,20); % Manual number of bins
+            end
             
             % Determine plot order
             pixCount = zeros(size(uniqueBins));
@@ -2368,7 +2372,7 @@ for i_dir = 1:length(clusterCellTypes)
             end
             box(ax,boxSetting)
             set(gca,'TickLength',[0.01 0.01],'LineWidth',2)
-            set( findall(gcf, '-property', 'fontsize'), 'fontsize', smallFontSize)
+            set( findall(gcf, '-property', 'fontsize'), 'fontsize', mediumFontSize)
 
             switch clusterTarget
                 case 'force'
@@ -2420,9 +2424,17 @@ for i_dir = 1:length(clusterCellTypes)
                     end
                     xticklabels(TickLabels)
             end
-            ylabel('Number of Pixels', 'FontSize', mediumFontSize)
-            xlabel(xlab, 'FontSize', mediumFontSize)
+%             ylabel('Number of Pixels', 'FontSize', largeFontSize)
+            xlabel(xlab, 'FontSize', largeFontSize)
 
+            % Remove 0-mark yticklabel
+            ax = gca;
+            ytickstr = get(ax, 'YTickLabel');
+            idx = strcmpi(ytickstr,'0');
+            ytickstr{idx} = '';   % needs to exist but make it empty
+            set(ax, 'YTickLabel', ytickstr);
+            clearvars ax
+            
             hold off
 
             % Create our filename
