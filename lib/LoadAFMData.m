@@ -417,7 +417,7 @@ for k = 1:length(Files)
                 idx = find(contains({fileStruct{i_pix}(:).Channel_name},'stiffness'),1);
                 k_cantilever(i_pix+indShift) = fileStruct{i_pix}(idx).extend;
                 
-                dataStruct(i_pix+indShift).r_tip = 15;   % Half-Angle, Degrees, of the Conical Tip
+                dataStruct(i_pix+indShift).r_tip = 65e-9;   % Half-Angle, Degrees, of the Conical Tip ; Tip radius of live cell probe is 65 nm
                 dataStruct(i_pix+indShift).nu_sample = 0.5;  % Poisson's Ratio of the sample
                 
             end
@@ -527,7 +527,7 @@ for k = 1:length(Files)
                     idx = find(contains({fileStruct{i_pix}(:).Channel_name},'stiffness'),1);
                     k_cantilever(i_pix+indShift) = fileStruct{i_pix}(idx).extend;
 
-                    dataStruct(i_pix+indShift).r_tip = 15;   % Half-Angle, Degrees, of the Conical Tip
+                    dataStruct(i_pix+indShift).r_tip = 65e-9;   % Half-Angle, Degrees, of the Conical Tip ; Tip radius of live cell probe is 65 nm
                     dataStruct(i_pix+indShift).nu_sample = 0.5;  % Poisson's Ratio of the sample
 
                 end

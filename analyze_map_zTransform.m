@@ -105,7 +105,7 @@ for i_dir = 1:length(Folders)
         % tipGeom = tipOpts{indx};
 
         % Alternatively, set those values manually
-        tipGeom = "conical";                        % The experiment tip geometry for the files that are being loaded
+        tipGeom = "spherical";                        % The experiment tip geometry for the files that are being loaded
 
         % Settings for how to use the loaded data during analysis
         useSmoothData = false;                      % The user can choose to use filtered data, or the original raw data for fitting
